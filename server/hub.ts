@@ -23,6 +23,8 @@ interface Client {
   /** Secret a DM joined with, kept until they restore a missing room. */
   pendingSecret?: string;
   alive: boolean;
+  /** Messages from one socket are handled strictly in order. */
+  queue: Promise<void>;
 }
 
 interface Room {
@@ -109,14 +111,14 @@ export class Hub {
   }
 
   connect(ws: WebSocket) {
-    const client: Client = { ws, id: randomBytes(6).toString('hex'), role: null, code: null, name: '', alive: true };
+    const client: Client = { ws, id: randomBytes(6).toString('hex'), role: null, code: null, name: '', alive: true, queue: Promise.resolve() };
     this.clients.add(client);
     ws.on('pong', () => { client.alive = true; });
     ws.on('message', (data) => {
       client.alive = true;
       let msg: ClientMsg;
       try { msg = JSON.parse(String(data)); } catch { return send(ws, { type: 'error', code: 'bad-message' }); }
-      this.handle(client, msg).catch((err) => {
+      client.queue = client.queue.then(() => this.handle(client, msg)).catch((err) => {
         console.error('[hub] handler error', err);
         send(ws, { type: 'error', code: 'bad-message' });
       });
@@ -233,8 +235,11 @@ export class Hub {
       send(c.ws, { type: 'state', game: room.game });
       send(c.ws, { type: 'presence', players: this.watchers(room) });
     } else {
+      // Bring existing players up to date first, so everyone shares one
+      // baseline and the next change is sent to all as a small diff.
+      this.broadcast(room);
       room.players.add(c);
-      this.sendFullView(room, c);
+      room.last = this.sendFullView(room, c);
       this.sendPresence(room);
     }
   }
@@ -321,6 +326,7 @@ export class Hub {
   private sendFullView(room: Room, c: Client) {
     const p = this.parts(room);
     send(c.ws, `{"type":"pview","screen":${p.screen},"static":${p.static},"dynamic":${p.dynamic}}`);
+    return p;
   }
 
   private schedule(room: Room) {

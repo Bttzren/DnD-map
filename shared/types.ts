@@ -75,6 +75,8 @@ export interface Token {
   note: string;
   down: boolean;
   hpVisibility: HpVisibility;
+  /** Initiative bonus, used when rolling. DM only. */
+  initMod?: number;
 }
 
 export interface AreaTemplate {

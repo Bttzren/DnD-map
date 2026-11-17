@@ -1,7 +1,7 @@
 // Built-in, free, deterministic map generators. Each produces a LayoutPlan
 // which the shared builder turns into a map.
 import { buildMapFromPlan } from './build';
-import { roomName, roomNote } from './names';
+import { mapName, roomName, roomNote } from './names';
 import type { LayoutPlan, PlanConnection, PlanCreature, PlanObject, PlanPatch, PlanRoom } from './plan';
 import { PRESETS } from './presets';
 import { makeRng, type Rng } from './rng';
@@ -192,18 +192,14 @@ function tavern(o: GenerateOptions, rng: Rng): LayoutPlan {
   return { name: 'The Prancing Stag', rooms, connections: conns, patches: [], objects, creatures: [] };
 }
 
-const TAVERN_NAMES = ['The Prancing Stag', 'The Gilded Tankard', 'The Drowned Rat', 'The Sleeping Giant', 'The Rusty Lantern',
-  'The Laughing Wyvern', 'The Last Candle', 'The Copper Kettle'];
-
 export function generatePlan(o: GenerateOptions): LayoutPlan {
   const rng = makeRng(`${o.seed}:${o.theme}:plan`);
   const dens = DENSITY[o.density ?? 'normal'];
   let plan: LayoutPlan;
-  if (o.theme === 'tavern') {
-    plan = tavern(o, rng);
-    plan.name = rng.pick(TAVERN_NAMES);
-  } else if (o.theme === 'cave' || o.theme === 'forest') plan = caves(o, rng, dens);
+  if (o.theme === 'tavern') plan = tavern(o, rng);
+  else if (o.theme === 'cave' || o.theme === 'forest') plan = caves(o, rng, dens);
   else plan = roomsAndCorridors(o, rng, dens);
+  plan.name = mapName(o.theme, rng);
   if (o.encounter) {
     plan.creatures = o.theme === 'tavern'
       ? [{ room: 'common', preset: 'innkeeper', count: 1 }, { room: 'common', preset: 'commoner', count: rng.int(2, 5) }, ...(rng.chance(0.5) ? [{ room: 'common', preset: 'bandit', count: rng.int(2, 3) }] : [])]

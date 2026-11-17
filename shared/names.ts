@@ -39,3 +39,17 @@ export function roomName(theme: Theme, rng: Rng, used: Set<string>): string {
 export function roomNote(theme: Theme, rng: Rng): string {
   return rng.chance(0.6) ? rng.pick(NOTES[theme]) : '';
 }
+
+const MAP_NAMES: Record<Theme, [string[], string[]]> = {
+  dungeon: [['The Sunken', 'The Forgotten', 'The Iron', 'The Broken', 'The Black', 'The Warden\'s', 'The Silent'], ['Keep', 'Halls', 'Bastion', 'Undercroft', 'Stronghold', 'Vaults', 'Dungeon']],
+  crypt: [['The Weeping', 'The Hollow', 'The Ashen', 'The Last', 'The Pale', 'The Nameless'], ['Crypt', 'Tomb', 'Catacombs', 'Ossuary', 'Mausoleum', 'Sepulchre']],
+  cave: [['The Glittering', 'The Drowned', 'The Howling', 'The Deep', 'The Fungal', 'The Whispering'], ['Caverns', 'Grottoes', 'Depths', 'Hollows', 'Warrens', 'Delve']],
+  sewer: [['The Rotting', 'The Old', 'The Flooded', 'The Rat King\'s', 'The Lower', 'The Forsaken'], ['Sewers', 'Cisterns', 'Drains', 'Tunnels', 'Undercity', 'Sluices']],
+  forest: [['The Thornwood', 'The Mossy', 'The Whispering', 'The Old', 'The Moonlit', 'The Tangled'], ['Glade', 'Clearing', 'Thicket', 'Crossing', 'Hollow', 'Wilds']],
+  tavern: [['The Prancing', 'The Gilded', 'The Drowned', 'The Sleeping', 'The Rusty', 'The Laughing'], ['Stag', 'Tankard', 'Rat', 'Giant', 'Lantern', 'Wyvern']],
+};
+
+export function mapName(theme: Theme, rng: Rng): string {
+  const [a, b] = MAP_NAMES[theme];
+  return `${rng.pick(a)} ${rng.pick(b)}`;
+}

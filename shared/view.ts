@@ -61,13 +61,25 @@ export function visibleTokens(map: MapData): Token[] {
     !t.hidden && (t.kind === 'player' || footprint(map, t.x, t.y, t.size).some((c) => map.fog[c] === 1)));
 }
 
+/** Revealed cells, plus the squares visible player tokens stand on. */
+function seenCells(map: MapData): number[] {
+  const seen = map.fog.slice();
+  for (const t of map.tokens) {
+    if (t.kind !== 'player' || t.hidden) continue;
+    for (const c of footprint(map, t.x, t.y, t.size)) seen[c] = 1;
+  }
+  return seen;
+}
+
 export function playerMap(map: MapData): PlayerMap {
   const W = map.width;
+  const seen = seenCells(map);
+  const sm = { width: map.width, height: map.height, fog: seen };
   const secret = new Set(map.doors.filter((d) => d.state === 'secret').map((d) => d.y * W + d.x));
   const terrain = map.terrain.map((t, i) => {
-    if (secret.has(i)) return map.fog[i] === 1 || nearRevealed(map, i) ? 'wall' : 'void';
-    if (map.fog[i] === 1) return t;
-    if ((t === 'wall' || t === 'void') && nearRevealed(map, i)) return t;
+    if (secret.has(i)) return seen[i] === 1 || nearRevealed(sm, i) ? 'wall' : 'void';
+    if (seen[i] === 1) return t;
+    if ((t === 'wall' || t === 'void') && nearRevealed(sm, i)) return t;
     return 'void';
   });
   const tokens = visibleTokens(map);
@@ -90,12 +102,12 @@ export function playerMap(map: MapData): PlayerMap {
     id: map.id, name: map.name, width: map.width, height: map.height, theme: map.theme,
     settings: { ...map.settings },
     terrain,
-    fog: map.fog.slice(),
+    fog: seen,
     doors: map.doors
-      .filter((d) => d.state !== 'secret' && map.fog[d.y * W + d.x] === 1)
+      .filter((d) => d.state !== 'secret' && seen[d.y * W + d.x] === 1)
       .map((d) => ({ id: d.id, x: d.x, y: d.y, state: d.state as 'open' | 'closed' })),
     objects: map.objects
-      .filter((o) => !o.hidden && map.fog[o.y * W + o.x] === 1)
+      .filter((o) => !o.hidden && seen[o.y * W + o.x] === 1)
       .map((o) => ({ id: o.id, x: o.x, y: o.y, kind: o.kind })),
     tokens: tokens.map(tokenForPlayers),
     templates: map.templates.filter((t) => !t.hidden).map((t) => ({ ...t })),
@@ -105,7 +117,7 @@ export function playerMap(map: MapData): PlayerMap {
   };
 }
 
-function nearRevealed(map: MapData, i: number): boolean {
+function nearRevealed(map: { width: number; height: number; fog: number[] }, i: number): boolean {
   const x = i % map.width, y = (i - x) / map.width;
   for (const [dx, dy] of DIRS8) {
     const nx = x + dx, ny = y + dy;

@@ -50,6 +50,15 @@ describe('playerView', () => {
     expect(playerView(g).map!.tokens.map((t) => t.name)).toEqual(['Hero']);
   });
 
+  it('lets players see the squares their own tokens stand on, but not hidden ones', () => {
+    m.tokens.push(makeToken({ name: 'Hero', kind: 'player', x: 9, y: 5 }));
+    m.tokens.push(makeToken({ name: 'Scout', kind: 'player', x: 10, y: 8, hidden: true }));
+    const v = playerView(g).map!;
+    expect(v.terrain[idx(m, 9, 5)]).toBe('floor');
+    expect(v.terrain[idx(m, 10, 6)]).toBe('void');
+    expect(v.terrain[idx(m, 10, 8)]).toBe('void');
+  });
+
   it('shows a large token if any covered cell is revealed', () => {
     m.tokens.push(makeToken({ name: 'Dragon', size: 2, x: 5, y: 4 }));
     m.tokens.push(makeToken({ name: 'Ogre', size: 2, x: 7, y: 4 }));

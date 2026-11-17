@@ -290,7 +290,7 @@ export function buildMapFromPlan(raw: unknown, opts: BuildOptions): MapData {
         counts.set(preset.id, num);
         map.tokens.push(makeToken({
           name: `${preset.name} ${num}`, label: preset.emoji, color: preset.color, size: preset.size,
-          kind: preset.kind, x, y, hp: preset.hp, maxHp: preset.hp, ac: preset.ac,
+          kind: preset.kind, x, y, hp: preset.hp, maxHp: preset.hp, ac: preset.ac, initMod: preset.dex,
         }));
       }
     }
