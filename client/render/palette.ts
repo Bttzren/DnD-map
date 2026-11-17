@@ -44,7 +44,7 @@ export const PALETTES: Record<Theme, Palette> = {
   dungeon: base,
   crypt: { ...base, floor: '#5f6168', floorAlt: '#565860', wall: '#22232a', wallTop: '#30323a', wallEdge: '#80838f', void: '#0a0a0e', rubble: '#7a7c84' },
   cave: { ...base, floor: '#5d4e3f', floorAlt: '#554738', wall: '#2b2219', wallTop: '#3a2e22', wallEdge: '#7a6450', pattern: 'rough', rubble: '#776655' },
-  sewer: { ...base, floor: '#55604f', floorAlt: '#4c5647', wall: '#232b22', wallTop: '#30392e', wallEdge: '#6f7d68', water: '#4a6b3d', waterDeep: '#2f4a28', waterHi: 'rgba(200,240,170,0.25)' },
+  sewer: { ...base, floor: '#55604f', floorAlt: '#4c5647', wall: '#232b22', wallTop: '#30392e', wallEdge: '#6f7d68', water: '#3b5a50', waterDeep: '#243f39', waterHi: 'rgba(190,230,200,0.28)' },
   tavern: { ...base, floor: '#80583a', floorAlt: '#744f33', floorLine: 'rgba(40,22,10,0.45)', wall: '#3a2a1e', wallTop: '#4c3726', wallEdge: '#a07a55', pattern: 'planks' },
   forest: { ...base, floor: '#6e6a52', floorAlt: '#646049', pattern: 'none', void: '#10170d', grid: 'rgba(0,0,0,0.45)' },
 };

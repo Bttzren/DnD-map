@@ -34,7 +34,7 @@ export const toasts = new Store<{ list: Toast[] }>({ list: [] });
 let toastId = 0;
 export function toast(text: string, kind: Toast['kind'] = 'info', ms = 2600) {
   const id = ++toastId;
-  toasts.set({ list: [...toasts.state.list.slice(-3), { id, text, kind }] });
+  toasts.set({ list: [...toasts.state.list.slice(-1), { id, text, kind }] });
   setTimeout(() => toasts.set({ list: toasts.state.list.filter((t) => t.id !== id) }), ms);
 }
 

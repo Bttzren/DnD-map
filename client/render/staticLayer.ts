@@ -81,6 +81,9 @@ export function drawStatic(map: RenderMap, canvas: HTMLCanvasElement | Offscreen
     if (isFloorish(T(x - 1, y))) ctx.fillRect(X, Y, e, px);
   }
 
+  // Caves: round off corners so passages look carved, not built.
+  if (map.theme === 'cave') roundCorners(ctx, map, px, p, T);
+
   // Tree canopies overlap neighbours, so they get their own pass.
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (T(x, y) !== 'trees') continue;
@@ -382,4 +385,31 @@ export function drawFog(map: RenderMap, canvas: HTMLCanvasElement, px: number) {
     ctx.moveTo(x * px, (y + 1) * px); ctx.lineTo((x + 1) * px, y * px);
   }
   ctx.stroke();
+}
+
+function roundCorners(ctx: CanvasRenderingContext2D, map: RenderMap, px: number, p: Palette, T: (x: number, y: number) => Terrain) {
+  const r = px * 0.5;
+  const corners: [number, number, number, number][] = [[-1, -1, 0, 0], [1, -1, 1, 0], [-1, 1, 0, 1], [1, 1, 1, 1]];
+  for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) {
+    const t = T(x, y);
+    const wall = t === 'wall';
+    if (!wall && !isFloorish(t)) continue;
+    for (const [dx, dy, cx, cy] of corners) {
+      const a = T(x + dx, y), b = T(x, y + dy);
+      // Inside corner of open ground: fill with rock. Outside corner of rock: cut it back.
+      const fill = wall ? (isFloorish(a) && isFloorish(b) ? p.floor : null) : (a === 'wall' && b === 'wall' ? p.wallTop : null);
+      if (!fill) continue;
+      // Fill the sliver between the cell corner and a quarter circle.
+      const ox = (x + cx) * px, oy = (y + cy) * px;
+      const hx = ox + (cx ? -r : r), vy = oy + (cy ? -r : r);
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.moveTo(ox, oy);
+      ctx.lineTo(hx, oy);
+      ctx.arcTo(ox, oy, ox, vy, r);
+      ctx.lineTo(ox, vy);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
 }
