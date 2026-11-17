@@ -56,7 +56,7 @@ export function sanitizePlan(raw: unknown, width: number, height: number, defaul
     const r = obj(r0);
     if (!r) continue;
     const shape = r.shape === 'cave' ? 'cave' : 'rect';
-    const minSide = shape === 'cave' ? 4 : 3;
+    const minSide = shape === 'cave' ? 4 : 2;
     const w = clamp(num(r.w, 6), minSide, width - 2);
     const h = clamp(num(r.h, 5), minSide, height - 2);
     const x = clamp(num(r.x, 1), 1, width - 1 - w);

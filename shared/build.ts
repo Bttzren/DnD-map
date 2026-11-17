@@ -69,11 +69,15 @@ function anchorOf(map: MapData, cells: number[], r: { x: number; y: number; w: n
   return best;
 }
 
-function lPath(map: MapData, a: number, b: number, rng: Rng): number[] {
+function lPath(map: MapData, a: number, b: number, rng: Rng, inside?: (cell: number) => boolean): number[] {
   let x = a % map.width, y = Math.floor(a / map.width);
   const tx = b % map.width, ty = Math.floor(b / map.width);
   const path = [a];
-  const horizFirst = rng.chance(0.5);
+  // Prefer the order whose corner lies inside one of the rooms, so the
+  // corridor leaves one room straight into the other where possible.
+  const hvCorner = inside?.(idx(map, tx, y)) ?? false;
+  const vhCorner = inside?.(idx(map, x, ty)) ?? false;
+  const horizFirst = hvCorner === vhCorner ? rng.chance(0.5) : hvCorner;
   const stepX = () => { while (x !== tx) { x += Math.sign(tx - x); path.push(idx(map, x, y)); } };
   const stepY = () => { while (y !== ty) { y += Math.sign(ty - y); path.push(idx(map, x, y)); } };
   if (horizFirst) { stepX(); stepY(); } else { stepY(); stepX(); }
@@ -143,12 +147,12 @@ export function buildMapFromPlan(raw: unknown, opts: BuildOptions): MapData {
   for (const c of plan.connections) {
     const A = roomById.get(c.from)!, B = roomById.get(c.to)!;
     const cave = A.shape === 'cave' || B.shape === 'cave';
+    const inA = new Set(roomCells.get(A.id)), inB = new Set(roomCells.get(B.id));
     const path = cave
       ? wanderPath(map, anchors.get(A.id)!, anchors.get(B.id)!, rng)
-      : lPath(map, anchors.get(A.id)!, anchors.get(B.id)!, rng);
+      : lPath(map, anchors.get(A.id)!, anchors.get(B.id)!, rng, (c) => inA.has(c) || inB.has(c));
     carve(path, cave, prof.corridor);
     if (c.door !== 'none' && !cave && prof.walls) {
-      const inB = new Set(roomCells.get(B.id)), inA = new Set(roomCells.get(A.id));
       let cell = -1;
       for (let k = 0; k < path.length - 1; k++) if (!inB.has(path[k]) && inB.has(path[k + 1])) { cell = path[k]; break; }
       if (cell < 0) for (let k = 1; k < path.length; k++) if (!inA.has(path[k]) && inA.has(path[k - 1])) { cell = path[k]; break; }
