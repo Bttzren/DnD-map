@@ -99,6 +99,20 @@ change the brush, `Tab` toggles the side panel, and holding `Space` pans.
 - **Table:** who's connected, blank everyone's screen with a message, show a
   banner ("Roll for initiative!"), or make players follow your view.
 
+## What players see
+
+Players get the map, full screen, and little else:
+
+- **Turn order** while combat is running (and you've made it visible): a strip
+  across the top on phones, a column on the right on bigger screens. The
+  current turn glows.
+- **Party chips** along the bottom: each player character's portrait, name,
+  health (shown the way you chose per token), conditions, and whether
+  they're down. The chip glows on that character's turn, and tapping it
+  centres the map on them.
+- Two small buttons: measure a distance, and fit the map to the screen.
+  Tapping a token shows its name and health.
+
 ## What players can't see
 
 The server builds each player's view and strips anything not revealed before

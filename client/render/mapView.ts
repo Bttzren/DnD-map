@@ -43,6 +43,8 @@ export class MapView {
   spaceDown = false;
   /** True once the person has panned or zoomed by hand. */
   userMoved = false;
+  /** Screen space covered by overlays at the top and bottom, kept clear when fitting. */
+  insets = { top: 0, bottom: 0 };
 
   private staticCanvas = document.createElement('canvas');
   private fogCanvas = document.createElement('canvas');
@@ -122,8 +124,10 @@ export class MapView {
       x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
     }
     const bw = x1 - x0, bh = y1 - y0;
-    const z = Math.min((w - 40) / bw, (h - 140) / bh);
-    this.cam = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: Math.max(6, Math.min(this.dm ? 80 : 64, z)) };
+    const { top, bottom } = this.insets;
+    const z = Math.max(6, Math.min(this.dm ? 80 : 64, (w - 40) / bw, (h - top - bottom - 24) / bh));
+    // Centre the map in the space between the overlays.
+    this.cam = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 - (top - bottom) / (2 * z), z };
     this.camTarget = null;
     this.userMoved = false;
     this.handlers.camera?.(this.cam);
@@ -564,7 +568,8 @@ export class MapView {
     }
 
     // Name plate when zoomed in or selected.
-    const showName = selected || this.hoverToken === tk.id || z >= 44;
+    // Players have party chips for names and HP, so their map stays clean.
+    const showName = selected || this.hoverToken === tk.id || (this.dm && z >= 44);
     if (showName) {
       const text = tk.hpText ? `${tk.name} · ${tk.hpText}` : tk.name;
       ctx.font = `600 ${Math.max(10, Math.min(13, z * 0.26))}px Inter, system-ui, sans-serif`;

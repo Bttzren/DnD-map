@@ -5,7 +5,7 @@ import { defaultScreen, type ScreenState } from '../../shared/types';
 import { pref } from '../local';
 import { Connection, type Status } from '../net';
 import { fromPlayerView } from '../render/adapt';
-import { MapView } from '../render/mapView';
+import { MapView, conditionColor } from '../render/mapView';
 import type { Ping, RenderToken } from '../render/types';
 import { Icon, Logo } from '../ui';
 import { navigate } from '../nav';
@@ -45,7 +45,6 @@ function PlayerView(p: { code: string; name: string }) {
   const [staticVer, setStaticVer] = useState(0);
   const [ruler, setRuler] = useState(false);
   const [tip, setTip] = useState<TokenTip | null>(null);
-  const [showInit, setShowInit] = useState(true);
   const rulerRef = useRef(ruler); rulerRef.current = ruler;
   const pings = useRef<Ping[]>([]);
   const screenRef = useRef(screen); screenRef.current = screen;
@@ -85,6 +84,24 @@ function PlayerView(p: { code: string; name: string }) {
     view.setMap(fromPlayerView(stat, dyn), `${stat.id}:${staticVer}`, '');
   }, [stat, dyn, staticVer, screen.blank]);
 
+  // Keep the map clear of the turn order above and the party chips below.
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const view = viewRef.current!;
+    const measure = () => {
+      const next = { top: topRef.current?.getBoundingClientRect().bottom ?? 0, bottom: bottomRef.current ? window.innerHeight - bottomRef.current.getBoundingClientRect().top : 0 };
+      const changed = Math.abs(next.top - view.insets.top) > 4 || Math.abs(next.bottom - view.insets.bottom) > 4;
+      view.insets = next;
+      if (changed && stat && !view.userMoved && !screenRef.current.followDm) view.fit();
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (topRef.current) ro.observe(topRef.current);
+    if (bottomRef.current) ro.observe(bottomRef.current);
+    return () => ro.disconnect();
+  });
+
   // Until the player pans or zooms, keep what's revealed framed nicely.
   useEffect(() => {
     const view = viewRef.current!;
@@ -123,27 +140,28 @@ function PlayerView(p: { code: string; name: string }) {
 
   const init = dyn?.initiative;
   const map = stat;
+  const party = (dyn?.tokens ?? []).filter((t) => t.kind === 'player');
+  const fighting = !!init && init.entries.length > 0;
+  const focus = (t: { x: number; y: number; size: number }) => viewRef.current?.centerOn(t.x + t.size / 2, t.y + t.size / 2);
   return (
     <div class="player">
       <div class="stage" ref={hostRef} />
 
       {!screen.blank && map && (
-        <div class="pl-top">
-          <div class="pl-chip">
-            <span class={`dot ${status}`} title={status} />
+        <div class="pl-top" ref={topRef}>
+          <div class="pl-chip pl-title">
+            <span class={`dot ${status}`} title={status === 'open' ? 'Connected' : 'Reconnecting…'} />
             <b>{map.name}</b>
+            <span class="scale" title="Each grid square is 5 feet"><i /> 5 ft</span>
+            {screen.followDm && <span class="faint small">· following DM</span>}
           </div>
-          <div class="pl-chip scale" title="Each grid square is 5 feet">
-            <i style={{ width: '22px' }} /> 5 ft
-            {screen.followDm && <span class="badge" style={{ marginLeft: '4px' }}>Following DM</span>}
-          </div>
+          {fighting && <TurnOrder init={init!} tokens={dyn!.tokens} onPick={focus} />}
+          {screen.banner && <div class="banner">{screen.banner}</div>}
         </div>
       )}
 
-      {screen.banner && !screen.blank && <div class="banner">{screen.banner}</div>}
-
       {tip && (
-        <div class="tooltip" style={{ left: tip.sx, top: tip.sy }}>
+        <div class="tooltip" style={{ left: `${tip.sx}px`, top: `${tip.sy}px` }}>
           <b>{tip.token.name}</b>
           {tip.token.hpText && <span class="muted"> · {tip.token.hpText}</span>}
           {tip.token.conditions.length > 0 && <div class="small muted">{tip.token.conditions.join(', ')}</div>}
@@ -152,22 +170,17 @@ function PlayerView(p: { code: string; name: string }) {
       )}
 
       {!screen.blank && map && (
-        <div class="pl-bottom">
-          {init && init.entries.length > 0 && showInit && (
-            <div class="init-strip" aria-label="Initiative order">
-              <span class="round">Round {init.round || 1}</span>
-              {init.entries.map((e) => (
-                <span key={e.tokenId} class={`who${e.tokenId === init.activeTokenId ? ' active' : ''}`}>
-                  <span class="avatar" style={{ background: e.color, width: '24px', height: '24px', fontSize: '13px' }}>{e.label}</span>{e.name}
-                </span>
-              ))}
+        <div class="pl-bottom" ref={bottomRef}>
+          <div class="pl-tools">
+            {ruler && <span class="pl-hint">Drag on the map to measure</span>}
+            <button class={`round-btn${ruler ? ' on' : ''}`} onClick={() => setRuler(!ruler)} aria-pressed={ruler} aria-label="Measure distance" title="Measure distance"><Icon name="ruler" /></button>
+            <button class="round-btn" onClick={() => viewRef.current?.fit()} aria-label="Fit map to screen" title="Fit map to screen"><Icon name="fit" /></button>
+          </div>
+          {party.length > 0 && (
+            <div class="party" aria-label="Party">
+              {party.map((t) => <PartyChip key={t.id} t={t} active={init?.activeTokenId === t.id} onClick={() => focus(t)} />)}
             </div>
           )}
-          <div class="pl-actions">
-            <button class={`btn${ruler ? ' on' : ''}`} onClick={() => setRuler(!ruler)} aria-pressed={ruler}><Icon name="ruler" /> {ruler ? 'Drag to measure' : 'Measure'}</button>
-            <button class="btn icon" style={{ width: '42px' }} onClick={() => viewRef.current?.fit()} aria-label="Fit map to screen"><Icon name="fit" /></button>
-            {init && init.entries.length > 0 && <button class={`btn icon${showInit ? ' on' : ''}`} style={{ width: '42px' }} onClick={() => setShowInit(!showInit)} aria-label="Toggle initiative"><Icon name="swords" /></button>}
-          </div>
         </div>
       )}
 
@@ -187,6 +200,57 @@ function PlayerView(p: { code: string; name: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+type PToken = PlayerDynamic['tokens'][number];
+
+function hpOf(t: PToken): { ratio: number | null; text: string | null } {
+  if (t.hp) return { ratio: t.hp.max ? t.hp.cur / t.hp.max : null, text: `${t.hp.cur}/${t.hp.max}` };
+  if (t.hpBar !== null) return { ratio: t.hpBar, text: null };
+  return { ratio: null, text: t.hpLabel };
+}
+
+const hpColor = (r: number) => (r > 0.5 ? '#22c55e' : r > 0.25 ? '#f59e0b' : '#ef4444');
+
+function PartyChip({ t, active, onClick }: { t: PToken; active: boolean; onClick: () => void }) {
+  const hp = hpOf(t);
+  return (
+    <button class={`pchip${active ? ' active' : ''}${t.down ? ' down' : ''}`} onClick={onClick} title={`Show ${t.name} on the map`}>
+      <span class="avatar" style={{ background: t.color }}>{t.label}</span>
+      <span class="pchip-body">
+        <span class="pchip-name">{t.name}{t.down && <span class="pchip-down"> · down</span>}</span>
+        {hp.ratio !== null && <span class="pchip-bar"><span style={{ width: `${Math.max(0, Math.min(1, hp.ratio)) * 100}%`, background: hpColor(hp.ratio) }} /></span>}
+        <span class="pchip-meta">
+          {hp.text && <span>{hp.text}</span>}
+          {t.conditions.slice(0, 3).map((c) => <span key={c} class="pchip-cond" title={c} style={{ background: conditionColor(c) }}>{c}</span>)}
+          {t.conditions.length > 3 && <span class="faint">+{t.conditions.length - 3}</span>}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function TurnOrder({ init, tokens, onPick }: { init: NonNullable<PlayerDynamic['initiative']>; tokens: PToken[]; onPick: (t: PToken) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector('.turn.active')?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [init.activeTokenId]);
+  return (
+    <div class="turns" ref={ref} aria-label="Turn order">
+      <span class="turns-round">Round {init.round || 1}</span>
+      {init.entries.map((e) => {
+        const t = tokens.find((x) => x.id === e.tokenId);
+        const active = e.tokenId === init.activeTokenId;
+        return (
+          <button key={e.tokenId} class={`turn${active ? ' active' : ''}${t?.kind === 'enemy' ? ' foe' : t?.kind === 'player' ? ' pc' : ''}${t?.down ? ' down' : ''}`}
+            onClick={() => t && onPick(t)} aria-current={active ? 'true' : undefined}>
+            <span class="avatar" style={{ background: e.color }}>{e.label}</span>
+            <span class="turn-name">{e.name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
