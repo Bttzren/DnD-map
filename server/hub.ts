@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import { buildMapFromPlan } from '../shared/build';
 import { applyOp, validateMap } from '../shared/ops';
+import { sanitizeMap, sanitizeScreen } from '../shared/sanitize';
 import { STATIC_KEYS, type AiRequest, type ClientMsg, type PlayerDynamic, type PlayerStatic, type Role, type ServerMsg, type Watcher } from '../shared/protocol';
 import { MAP_MAX, MAP_MIN, THEMES, defaultScreen, normalizeCode, type Game } from '../shared/types';
 import { playerView } from '../shared/view';
@@ -254,10 +255,11 @@ export class Hub {
     try {
       if (!game || typeof game !== 'object' || !Array.isArray(game.maps) || game.maps.length > 100) throw new Error('bad game');
       game.maps.forEach(validateMap);
+      const maps = game.maps.map(sanitizeMap);
       const clean: Game = {
-        code, maps: game.maps,
-        liveMapId: game.maps.some((m) => m.id === game.liveMapId) ? game.liveMapId : game.maps[0]?.id ?? null,
-        screen: { ...defaultScreen(), ...(game.screen && typeof game.screen === 'object' ? game.screen : {}) },
+        code, maps,
+        liveMapId: maps.some((m) => m.id === game.liveMapId) ? game.liveMapId : maps[0]?.id ?? null,
+        screen: sanitizeScreen(game.screen),
         createdAt: Number(game.createdAt) || Date.now(), updatedAt: Date.now(),
       };
       const room = this.makeRoom(clean, hashSecret(c.pendingSecret));
@@ -340,7 +342,12 @@ export class Hub {
   /** Send players only the parts of their view that changed. */
   broadcast(room: Room) {
     if (!room.players.size) { room.last = { screen: '', static: '', dynamic: '' }; return; }
-    const p = this.parts(room);
+    let p: Room['last'];
+    try { p = this.parts(room); } catch (err) {
+      // Never let one game's bad data take the server down.
+      console.error(`[hub] could not build player view for ${room.code}:`, err);
+      return;
+    }
     const fields: string[] = [];
     if (p.screen !== room.last.screen) fields.push(`"screen":${p.screen}`);
     if (p.static !== room.last.static) fields.push(`"static":${p.static}`);

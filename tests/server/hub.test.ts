@@ -212,6 +212,23 @@ describe('server', () => {
     expect((await d.next('ai.error')).message).toMatch(/not set up/);
   });
 
+  it('survives a malformed token and keeps serving players', async () => {
+    const { port, base } = await start();
+    const { body: g } = await newGame(base);
+    const d = await dm(port, g.code, g.dmSecret);
+    await d.next('state');
+    const map = generateMap({ theme: 'dungeon', width: 20, height: 20, seed: 'm' });
+    map.fog.fill(1);
+    d.send({ type: 'op', op: { t: 'map.put', map } });
+    const p = await player(port, g.code);
+    await p.next('pview', (m) => !!m.static);
+    d.send({ type: 'op', op: { t: 'item.put', mapId: map.id, coll: 'tokens', item: { id: 'evil', x: {}, conditions: 'nope', name: 7 } } });
+    d.send({ type: 'op', op: { t: 'item.put', mapId: map.id, coll: 'tokens', item: makeToken({ name: 'Fine', x: 1, y: 1 }) } });
+    const v = await p.next('pview', (m) => !!m.dynamic?.tokens.some((t) => t.name === 'Fine'));
+    expect(v.dynamic!.tokens.find((t) => t.id === 'evil')!.conditions).toEqual([]);
+    expect((await fetch(`${base}/api/health`)).ok).toBe(true);
+  });
+
   it('rejects a malformed map without crashing', async () => {
     const { port, base } = await start();
     const { body: g } = await newGame(base);

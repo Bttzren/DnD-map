@@ -1,7 +1,7 @@
 # DnD Map: design
 
 Date: 2026-11-16
-Status: awaiting approval
+Status: approved with revision 2 (built)
 
 ## Intent
 

@@ -205,3 +205,57 @@ describe('templateCells', () => {
     expect(cells).not.toContain(idx(m, 3, 12));
   });
 });
+
+describe('sanitising ops from the wire', () => {
+  let g: Game; let m: MapData;
+  beforeEach(() => { g = game(); m = g.maps[0]; });
+
+  it('cleans a malformed token so the player view never throws', () => {
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'tokens', item: { id: 'bad', x: 'nope', y: 9999, size: 99, kind: 'dragon', name: 'x'.repeat(500), color: 'javascript:alert(1)' } as never });
+    const t = m.tokens[0];
+    expect(t.x).toBe(0);
+    expect(t.y).toBe(m.height - t.size);
+    expect(t.size).toBeLessThanOrEqual(4);
+    expect(t.kind).toBe('enemy');
+    expect(t.name.length).toBeLessThanOrEqual(40);
+    expect(t.color).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(t.conditions).toEqual([]);
+    m.fog.fill(1);
+    expect(() => playerView(g)).not.toThrow();
+  });
+
+  it('drops items without an id and doors off the map', () => {
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'tokens', item: { name: 'no id' } as never });
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'doors', item: { id: 'd', x: -5, y: 2, state: 'open' } });
+    expect(m.tokens).toHaveLength(0);
+    expect(m.doors).toHaveLength(0);
+  });
+
+  it('cleans every item inside a map.put', () => {
+    const bad = blankMap({ width: 10, height: 10, theme: 'cave' });
+    (bad.tokens as unknown[]).push({ id: 't1', x: 3, y: 3 }, 'junk', null);
+    (bad.labels as unknown[]).push({ id: 'l1', text: 42 });
+    (bad.settings as unknown as Record<string, unknown>).ambience = 'meteor-shower';
+    bad.initiative = { entries: [{ tokenId: 't1', init: 'high' }], turn: 'x', round: null, visible: 'yes' } as never;
+    applyOp(g, { t: 'map.put', map: bad });
+    const stored = g.maps.find((x) => x.id === bad.id)!;
+    expect(stored.tokens).toHaveLength(1);
+    expect(stored.tokens[0].conditions).toEqual([]);
+    expect(stored.labels[0].text).toBe('');
+    expect(stored.settings.ambience).toBe('none');
+    expect(stored.initiative.entries[0].init).toBe(0);
+    expect(stored.initiative.visible).toBe(false);
+    g.liveMapId = bad.id;
+    stored.fog.fill(1);
+    expect(() => playerView(g)).not.toThrow();
+  });
+
+  it('cleans screen and settings patches', () => {
+    applyOp(g, { t: 'game.patch', screen: { banner: 'b'.repeat(999), blank: 'yes' as never } });
+    expect(g.screen.banner.length).toBeLessThanOrEqual(140);
+    expect(g.screen.blank).toBe(false);
+    applyOp(g, { t: 'map.patch', mapId: m.id, patch: { settings: { gridOpacity: 50, distanceRule: 'warp' } as never } });
+    expect(m.settings.gridOpacity).toBeLessThanOrEqual(1);
+    expect(m.settings.distanceRule).toBe('5e');
+  });
+});

@@ -1,7 +1,8 @@
 // Every change to a game is an Op. The DM client applies ops locally and
 // sends them; the server applies the same ops with the same reducer.
+import { sanitizeInitiative, sanitizeItem, sanitizeMap, sanitizeScreen, sanitizeSettings } from './sanitize';
 import {
-  MAP_MAX, MAP_MIN, TERRAINS,
+  MAP_MAX, MAP_MIN, THEMES, TERRAINS,
   type AreaTemplate, type Door, type Drawing, type Game, type Label, type MapData,
   type MapObject, type Room, type ScreenState, type Terrain, type Token,
 } from './types';
@@ -58,9 +59,10 @@ export function applyOp(game: Game, op: Op): Game {
   switch (op.t) {
     case 'map.put': {
       validateMap(op.map);
-      const i = game.maps.findIndex((m) => m.id === op.map.id);
-      if (i >= 0) game.maps[i] = op.map; else game.maps.push(op.map);
-      if (!game.liveMapId) game.liveMapId = op.map.id;
+      const map = sanitizeMap(op.map);
+      const i = game.maps.findIndex((m) => m.id === map.id);
+      if (i >= 0) game.maps[i] = map; else if (game.maps.length < 100) game.maps.push(map); else throw new Error('too many maps');
+      if (!game.liveMapId) game.liveMapId = map.id;
       break;
     }
     case 'map.delete': {
@@ -70,7 +72,7 @@ export function applyOp(game: Game, op: Op): Game {
     }
     case 'game.patch': {
       if (op.liveMapId === null || (op.liveMapId && findMap(game, op.liveMapId))) game.liveMapId = op.liveMapId;
-      if (op.screen) game.screen = { ...game.screen, ...op.screen };
+      if (op.screen) game.screen = sanitizeScreen(op.screen, game.screen);
       break;
     }
     default: {
@@ -89,27 +91,32 @@ function applyMapOp(map: MapData, op: Exclude<Op, { t: 'map.put' | 'map.delete' 
   switch (op.t) {
     case 'map.patch':
       if (typeof op.patch.name === 'string') map.name = op.patch.name.slice(0, 80);
-      if (op.patch.settings) map.settings = { ...map.settings, ...op.patch.settings };
-      if (op.patch.initiative) map.initiative = op.patch.initiative;
-      if (op.patch.theme) map.theme = op.patch.theme;
+      if (op.patch.settings) map.settings = sanitizeSettings(op.patch.settings, map.settings);
+      if (op.patch.initiative) map.initiative = sanitizeInitiative(op.patch.initiative);
+      if (op.patch.theme && THEMES.includes(op.patch.theme)) map.theme = op.patch.theme;
       break;
     case 'terrain.set':
-      for (const [c, t] of op.cells) if (okCell(c) && TERRAIN_SET.has(t)) map.terrain[c] = t;
+      if (!Array.isArray(op.cells)) break;
+      for (const pair of op.cells) if (Array.isArray(pair) && okCell(pair[0]) && TERRAIN_SET.has(pair[1])) map.terrain[pair[0]] = pair[1];
       break;
     case 'fog.set':
-      for (const c of op.cells) if (okCell(c)) map.fog[c] = op.revealed ? 1 : 0;
+      if (!Array.isArray(op.cells)) break;
+      for (const c of op.cells) if (okCell(c)) map.fog[c] = op.revealed === true ? 1 : 0;
       break;
     case 'fog.all':
-      map.fog.fill(op.revealed ? 1 : 0);
+      map.fog.fill(op.revealed === true ? 1 : 0);
       break;
     case 'item.put': {
+      if (!COLLS.includes(op.coll)) break;
+      const item = sanitizeItem(op.coll, op.item, map);
+      if (!item) break;
       const list = map[op.coll] as { id: string }[];
-      if (!op.item || typeof op.item.id !== 'string') break;
-      const i = list.findIndex((x) => x.id === op.item.id);
-      if (i >= 0) list[i] = op.item; else if (list.length < MAX_ITEMS) list.push(op.item);
+      const i = list.findIndex((x) => x.id === item.id);
+      if (i >= 0) list[i] = item; else if (list.length < MAX_ITEMS) list.push(item);
       break;
     }
     case 'item.delete': {
+      if (!COLLS.includes(op.coll)) break;
       (map as unknown as Record<Coll, { id: string }[]>)[op.coll] = (map[op.coll] as { id: string }[]).filter((x) => x.id !== op.id);
       if (op.coll === 'tokens') {
         const init = map.initiative;
