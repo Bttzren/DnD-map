@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeAi } from './ai';
@@ -19,6 +20,8 @@ const app = await createApp({
 
 app.server.listen(port, () => {
   console.log(`DnD Map running on http://localhost:${port}`);
+  const lan = Object.values(networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i!.address);
+  for (const ip of lan) console.log(`  Players on your wifi: http://${ip}:${port}`);
   console.log(`  AI generator: ${ai ? 'on' : 'off (set ANTHROPIC_API_KEY to enable)'}`);
   console.log(`  Host password: ${process.env.HOST_PASSWORD ? 'required to start games' : 'not set (anyone can start a game)'}`);
 });

@@ -1,0 +1,23 @@
+# One-click deploy on Render (https://render.com). The free plan works:
+# it sleeps when idle and wipes its disk on restart, and the DM's browser
+# restores the game automatically when that happens.
+services:
+  - type: web
+    name: dnd-map
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Signs DM links so only the real DM can restore a game after a restart.
+      - key: SECRET_KEY
+        generateValue: true
+      # Optional: required to start new games. Players never need it.
+      - key: HOST_PASSWORD
+        sync: false
+      # Optional: turns on AI map generation.
+      - key: ANTHROPIC_API_KEY
+        sync: false
