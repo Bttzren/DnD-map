@@ -43,10 +43,17 @@ correction.
 8. It runs free: on a free hosting tier, or on the DM's laptop for
    in-person games.
 
+## Revision 2 (owner feedback: "allow more options for the DM, make the UI better")
+
+The owner asked for a bigger DM toolkit and a better-looking UI without
+naming specifics, so the additions below are the designer's calls. They
+are written into the sections that follow: "DM toolkit" and "Look and
+feel" are new, and initiative tracking moved from non-goals to goals.
+
 ## Non-goals
 
 - Players moving tokens or editing anything.
-- Dice, character sheets, initiative tracking, chat, voice.
+- Dice, character sheets, chat, voice.
 - Accounts, logins, friends lists.
 - World or region maps.
 - AI-painted map images.
@@ -212,6 +219,72 @@ tests, and it is the only path to a player.
   requests per minute per room.
 - Rooms unused for 30 days are deleted.
 
+## DM toolkit (revision 2)
+
+Everything here is DM-only to operate. "Players see" says what reaches
+player screens.
+
+- **Token details.** HP (current/max), AC, conditions (poisoned,
+  prone, stunned, etc. shown as small badges), a DM note, and a
+  "dead/down" state that greys the token. Per token the DM picks what
+  players see of its HP: exact numbers, a health bar only, a vague
+  word (healthy / bloodied / near death), or nothing. Defaults: player
+  tokens exact, enemies vague.
+- **Quick add.** A monster/NPC palette of presets (goblin, orc,
+  skeleton, wolf, dragon, etc. with emoji, size, HP, AC). Add one or a
+  batch ("4 goblins") that get numbered names and spread over free
+  cells. Duplicate any token.
+- **AI populate.** The AI layout plan can include suggested creatures
+  per room; the DM chooses whether to place them. The built-in
+  generator can also scatter a themed encounter.
+- **Initiative tracker.** Add tokens to an order, set or roll
+  initiative (d20 + bonus), next/previous turn, round counter. The
+  active token gets a glowing ring on all screens. Toggle whether
+  players see the order (hidden tokens never appear in it).
+- **Area templates.** Circle, cone, line, square, sized in feet, with
+  a colour. Visible to players, and they show which squares they
+  cover.
+- **Drawing and labels.** Freehand lines and text labels on the map,
+  shown to players or DM-only.
+- **Ping and focus.** Click to send a pulse that players see. Shift
+  (or long-press) to also pull every player's view to that spot.
+- **Player screen controls.** Blank the players' screen with a message
+  ("Short rest..."), show a banner message over the map, or lock
+  players to follow the DM's view.
+- **Ambience.** Optional overlay on the live map: rain, snow, fog
+  drift, embers, or darkness tint.
+- **Map settings.** Name, size, theme, grid on/off and colour, distance
+  rule (5e standard 5 ft diagonals, alternating 5/10, or exact
+  Euclidean).
+- **Map management.** Duplicate, rename, delete, export/import, and
+  move tokens to another map when the party travels.
+- **Who's watching.** Players type an optional name on joining; the DM
+  sees the list.
+- **Undo/redo** for map edits and token changes, and keyboard
+  shortcuts for every tool.
+
+## Look and feel (revision 2)
+
+- Dark "candle-lit tabletop" theme: deep slate panels, parchment-gold
+  accents, a serif display face for headings, clean sans for controls.
+  A light theme is not a goal.
+- The map is drawn, not tiled: stone floors with subtle variation,
+  walls with depth shading and a cast shadow on floors, animated water
+  and lava, scattered tree canopies, objects drawn as simple
+  illustrated shapes. Each theme has its own palette.
+- DM layout: slim top bar (game code, player link, live map switch,
+  watchers), icon tool rail on the left with tooltips and shortcuts,
+  tabbed right panel (Generate, Tokens, Initiative, Map), and a
+  context inspector for the selected token. Panels collapse to give
+  the map the screen.
+- Tokens are round discs with a coloured ring by kind, emoji or
+  initials, a name plate on hover, HP bar under, condition badges
+  around the rim. Moves animate.
+- Toasts for actions, confirmation for destructive ones.
+- Player view: full-bleed map, a minimal top strip (map name, scale),
+  a bottom drawer with the initiative order (if shared) and the
+  ruler, all thumb-reachable on a phone.
+
 ## What the screens look like
 
 DM screen (laptop):
@@ -261,6 +334,5 @@ pan, tap two spots to measure. A small bar shows the map name and a
 
 ## Possible later
 
-Initiative order, a DM "ping" that flashes a spot for players, area
-templates for spells, status markers on tokens, player-controlled
-tokens as an opt-in.
+Player-controlled tokens as an opt-in, dynamic lighting and line of
+sight, dice rolling, uploaded token images.
