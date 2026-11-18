@@ -9,8 +9,6 @@ import { MapView, conditionColor } from '../render/mapView';
 import type { Ping, RenderToken } from '../render/types';
 import { Avatar, Icon, Logo, Modal, toast } from '../ui';
 import { fileToIcon, pickImage, playerImages, type ImageResolver } from '../images';
-import { DicePad, RollLine } from '../dice';
-import type { RollResult } from '../../shared/dice';
 import { navigate } from '../nav';
 
 export function PlayerApp(p: { code: string }) {
@@ -53,8 +51,6 @@ function PlayerView(p: { code: string; name: string }) {
   const screenRef = useRef(screen); screenRef.current = screen;
   const connRef = useRef<Connection | null>(null);
   const [picSheet, setPicSheet] = useState(false);
-  const [diceOpen, setDiceOpen] = useState(false);
-  const [rolls, setRolls] = useState<RollResult[]>([]);
   const [bottomInset, setBottomInset] = useState(120);
   const meKey = `me:${p.code}`;
   const [me, setMeState] = useState<string | null>(() => pref.get<string | null>(meKey, null));
@@ -71,11 +67,6 @@ function PlayerView(p: { code: string; name: string }) {
       () => ({ type: 'join', code: p.code, role: 'player', name: p.name }),
       (m: ServerMsg) => {
         if (m.type === 'error' && (m.code === 'not-allowed' || m.code === 'bad-message') && m.message) toast(m.message, 'error');
-        if (m.type === 'roll') {
-          setRolls((cur) => [...cur.slice(-2), m.roll]);
-          setTimeout(() => setRolls((cur) => cur.filter((x) => x.id !== m.roll.id)), 7000);
-          if (m.roll.crit === 'hit') navigator.vibrate?.([30, 40, 30]);
-        }
         if (m.type === 'error' && m.code === 'no-room') { setWaiting(true); setTimeout(() => conn.reconnect(), 4000); }
         if (m.type === 'pview') {
           setWaiting(false);
@@ -123,6 +114,13 @@ function PlayerView(p: { code: string; name: string }) {
     if (bottomRef.current) ro.observe(bottomRef.current);
     return () => ro.disconnect();
   });
+
+  // Once, the first time a map shows up: how to point at things.
+  useEffect(() => {
+    if (!stat || pref.get('pingTip', false)) return;
+    pref.set('pingTip', true);
+    setTimeout(() => toast('Tip: press and hold the map to point at a spot for everyone', 'info', 5000), 1200);
+  }, [!!stat]);
 
   // Until the player pans or zooms, keep what's revealed framed nicely.
   useEffect(() => {
@@ -206,7 +204,6 @@ function PlayerView(p: { code: string; name: string }) {
             {ruler && <span class="pl-hint">Drag on the map to measure</span>}
             <button class={`round-btn${ruler ? ' on' : ''}`} onClick={() => setRuler(!ruler)} aria-pressed={ruler} aria-label="Measure distance" title="Measure distance"><Icon name="ruler" /></button>
             <button class="round-btn" onClick={() => viewRef.current?.fit()} aria-label="Fit map to screen" title="Fit map to screen"><Icon name="fit" /></button>
-            <button class={`round-btn${diceOpen ? ' on' : ''}`} onClick={() => setDiceOpen(!diceOpen)} aria-pressed={diceOpen} aria-label="Roll dice" title="Roll dice"><Icon name="dice" /></button>
             {party.length > 0 && <button class="round-btn" onClick={() => setPicSheet(true)} aria-label="Set your character’s picture" title="Set your character’s picture"><Icon name="camera" /></button>}
           </div>
           {party.length > 0 && (
@@ -214,30 +211,6 @@ function PlayerView(p: { code: string; name: string }) {
               {party.map((t) => <PartyChip key={t.id} t={t} img={img} active={init?.activeTokenId === t.id} onClick={() => focus(t)} />)}
             </div>
           )}
-        </div>
-      )}
-
-      {!screen.blank && map && rolls.length > 0 && !diceOpen && (
-        <div class="pl-rolls" style={{ bottom: `${bottomInset + 12}px` }} aria-live="polite">
-          {rolls.map((r) => <RollLine key={r.id} r={r} />)}
-        </div>
-      )}
-
-      {!screen.blank && map && diceOpen && (
-        <div class="card pl-dice" style={{ bottom: `${bottomInset + 12}px` }}>
-          <div class="dice-head">
-            <b class="grow">Roll</b>
-            {party.length > 0 && (
-              <select class="input sm" value={me ?? ''} onChange={(e) => setMe(e.currentTarget.value || null)} aria-label="Roll as">
-                <option value="">as {p.name || 'me'}</option>
-                {party.map((t) => <option key={t.id} value={t.id}>as {t.name}</option>)}
-              </select>
-            )}
-            <button class="btn ghost sm icon" onClick={() => setDiceOpen(false)} aria-label="Close dice"><Icon name="x" size={15} /></button>
-          </div>
-          <DicePad compact onRoll={(expr, label) => connRef.current?.send({ type: 'roll', expr, label, ...(me ? { as: me } : {}) }, false)} />
-          {rolls.length > 0 && <div class="roll-log" style={{ marginTop: '8px' }}>{rolls.slice().reverse().map((r) => <RollLine key={r.id} r={r} />)}</div>}
-          <span class="hint">Everyone sees your rolls. Tip: press and hold the map to point at a spot.</span>
         </div>
       )}
 

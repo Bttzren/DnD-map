@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon, QR, Switch, copy, toast, useStore } from '../../ui';
-import { DicePad, RollLine } from '../../dice';
 import type { DmCtl } from '../state';
 
 export const playerLink = (code: string) => `${location.origin}/play/${code}`;
@@ -8,8 +7,6 @@ export const playerLink = (code: string) => `${location.origin}/play/${code}`;
 export function TablePanel({ ctl }: { ctl: DmCtl }) {
   useStore(ctl, (s) => s.ver);
   const players = useStore(ctl, (s) => s.players);
-  const rolls = useStore(ctl, (s) => s.rolls);
-  const [secret, setSecret] = useState(true);
   const game = ctl.state.game;
   const [banner, setBanner] = useState(game?.screen.banner ?? '');
   const [message, setMessage] = useState(game?.screen.message ?? '');
@@ -32,17 +29,6 @@ export function TablePanel({ ctl }: { ctl: DmCtl }) {
           </div>
           <button class="btn ghost" style={{ height: 'auto', padding: '0' }} onClick={() => ctl.set({ share: true })} title="Show a big QR code"><QR text={link} size={104} /></button>
         </div>
-      </div>
-
-      <div class="section">
-        <div class="row between"><h3>Dice</h3><Switch checked={secret} onChange={setSecret} label="Secret" /></div>
-        <DicePad onRoll={(expr, label) => ctl.roll(expr, label, secret)} />
-        <span class="hint">{secret ? 'Only you see these rolls.' : 'Everyone at the table sees these rolls.'} Players' rolls show up here too.</span>
-        {rolls.length > 0 && (
-          <div class="roll-log" aria-label="Recent rolls">
-            {rolls.map((r) => <RollLine key={r.id} r={r} mine={r.by === 'DM'} />)}
-          </div>
-        )}
       </div>
 
       <div class="section">

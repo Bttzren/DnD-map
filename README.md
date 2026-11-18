@@ -99,9 +99,6 @@ change the brush, `Tab` toggles the side panel, and holding `Space` pans.
   another, then press **Show this map**. Weather (rain, snow, mist, embers,
   darkness), the diagonal rule (5 ft, 5/10, or exact), grid strength, moving
   the party between maps, and import/export.
-- **Dice:** in **Table**, roll any dice (d20, 2d6+3, 8d6, advantage,
-  disadvantage). Rolls are secret by default; switch **Secret** off to show
-  one to everyone. Players' rolls appear here too.
 - **Table:** who's connected, blank everyone's screen with a message, show a
   banner ("Roll for initiative!"), or make players follow your view.
 
@@ -116,14 +113,11 @@ Players get the map, full screen, and little else:
   health (shown the way you chose per token), conditions, and whether
   they're down. The chip glows on that character's turn, and tapping it
   centres the map on them.
-- Four small buttons: measure a distance, fit the map to the screen, 🎲
-  roll dice (everyone sees the result, under your character's name), and 📷
-  set your character's picture (take a photo, or pick one from the camera
+- Three small buttons: measure a distance, fit the map to the screen, and
+  📷 set your character's picture (take a photo, or pick one from the camera
   roll or files). Tapping a token shows its name and health.
 - **Press and hold** the map to point at a spot: everyone sees a ping in your
   character's colour with your name on it.
-
-Dice are rolled on the server, so nobody can fake a result.
 
 Players can only change pictures on party tokens they can see, never on
 monsters. Pictures are shrunk to a small square on the device before they're

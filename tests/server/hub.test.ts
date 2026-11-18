@@ -152,7 +152,7 @@ describe('server', () => {
     await p.next('pview', (m) => !!m.dynamic?.tokens.some((t) => t.id === hero.id && !t.image));
   });
 
-  it('relays player pings with their character colour, and rolls dice on the server', async () => {
+  it('relays player pings with their character colour', async () => {
     const { port, base } = await start();
     const { body: g } = await newGame(base);
     const d = await dm(port, g.code, g.dmSecret);
@@ -176,29 +176,6 @@ describe('server', () => {
     for (let i = 0; i < 9; i++) p1.send({ type: 'ping', x: 1, y: 1, focus: false });
     expect((await p1.next('error')).message).toMatch(/Too many pings/);
 
-    p2.send({ type: 'roll', expr: '2d6+3', label: 'Damage' });
-    const r = await d.next('roll');
-    expect(r.roll).toMatchObject({ by: 'Bo', text: '2d6+3', label: 'Damage', secret: false });
-    expect(r.roll.total).toBeGreaterThanOrEqual(5);
-    expect(r.roll.total).toBeLessThanOrEqual(15);
-    expect((await p1.next('roll')).roll.id).toBe(r.roll.id);
-    p2.send({ type: 'roll', expr: 'banana' });
-    expect((await p2.next('error')).code).toBe('bad-message');
-    // Players can't make secret rolls.
-    p2.send({ type: 'roll', expr: 'd20', secret: true });
-    expect((await p1.next('roll')).roll.secret).toBe(false);
-
-    // A DM secret roll reaches DMs only.
-    d.send({ type: 'roll', expr: 'd20+7', label: 'SECRET-STEALTH-CHECK', secret: true });
-    const sr = await d.next('roll', (m) => m.roll.secret);
-    expect(sr.roll.by).toBe('DM');
-    d.send({ type: 'roll', expr: 'd4', label: 'public' });
-    await p1.next('roll', (m) => m.roll.label === 'public');
-    for (const raw of [...p1.raw, ...p2.raw]) expect(raw).not.toContain('SECRET-STEALTH-CHECK');
-
-    // Roll spam is limited too.
-    for (let i = 0; i < 11; i++) p1.send({ type: 'roll', expr: 'd6' });
-    expect((await p1.next('error', (m) => /Too many rolls/.test(m.message ?? ''))).code).toBe('not-allowed');
   });
 
   it('rejects a wrong DM secret and player ops', async () => {
