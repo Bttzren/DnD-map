@@ -18,9 +18,21 @@ const SCALE: Record<string, number> = {
   'wall-dungeon': 1.1, 'wall-crypt': 1.2, 'wall-cave': 1.2, 'wall-sewer': 1.1, 'wall-tavern': 1.1,
 };
 
+type Img = ImageBitmap | HTMLImageElement;
+type Canvas = OffscreenCanvas | HTMLCanvasElement;
+type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+/** A scratch canvas that works on the main thread and in a worker. */
+export function makeCanvas(w: number, h: number): Canvas {
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
 let manifest: Record<string, { meters: number }> = {};
-const images = new Map<string, HTMLImageElement>();
-const tiles = new Map<string, HTMLCanvasElement>();
+const images = new Map<string, Img>();
+const tiles = new Map<string, Canvas>();
 let loading: Promise<boolean> | null = null;
 
 export function loadTextures(): Promise<boolean> {
@@ -29,13 +41,20 @@ export function loadTextures(): Promise<boolean> {
       const r = await fetch('/textures/manifest.json');
       if (!r.ok) return false;
       manifest = await r.json();
-      await Promise.all(Object.keys(manifest).map((name) => new Promise<void>((res) => {
-        const im = new Image();
-        im.decoding = 'async';
-        im.onload = () => { images.set(name, im); res(); };
-        im.onerror = () => res();
-        im.src = `/textures/${name}.webp`;
-      })));
+      await Promise.all(Object.keys(manifest).map(async (name) => {
+        const url = `/textures/${name}.webp`;
+        try {
+          if (typeof createImageBitmap === 'function') {
+            const blob = await fetch(url).then((x) => (x.ok ? x.blob() : Promise.reject(new Error('missing'))));
+            images.set(name, await createImageBitmap(blob));
+          } else {
+            const im = new Image();
+            im.src = url;
+            await im.decode();
+            images.set(name, im);
+          }
+        } catch { /* leave it out; layers without a texture fall back to colour */ }
+      }));
       return images.size > 0;
     })().catch(() => false);
   }
@@ -51,7 +70,7 @@ export function tileCells(name: string): number {
 }
 
 /** The texture downscaled (by repeated halving, for a clean result) to one tile at `px` per square. */
-function tile(name: string, px: number): HTMLCanvasElement | null {
+function tile(name: string, px: number): Canvas | null {
   const im = images.get(name);
   if (!im) return null;
   const size = Math.max(8, Math.round(tileCells(name) * px));
@@ -59,18 +78,16 @@ function tile(name: string, px: number): HTMLCanvasElement | null {
   const hit = tiles.get(key);
   if (hit) return hit;
   let src: CanvasImageSource = im;
-  let w = im.naturalWidth;
+  let w = im.width;
   while (w / 2 >= size * 1.01) {
-    const half = document.createElement('canvas');
-    half.width = half.height = Math.round(w / 2);
-    const c = half.getContext('2d')!;
+    const half = makeCanvas(Math.round(w / 2), Math.round(w / 2));
+    const c = half.getContext('2d') as Ctx2D;
     c.imageSmoothingQuality = 'high';
     c.drawImage(src, 0, 0, half.width, half.height);
     src = half; w = half.width;
   }
-  const out = document.createElement('canvas');
-  out.width = out.height = size;
-  const c = out.getContext('2d')!;
+  const out = makeCanvas(size, size);
+  const c = out.getContext('2d') as Ctx2D;
   c.imageSmoothingQuality = 'high';
   c.drawImage(src, 0, 0, size, size);
   tiles.set(key, out);
@@ -79,7 +96,7 @@ function tile(name: string, px: number): HTMLCanvasElement | null {
 }
 
 /** A repeating pattern for `name` at `px` per square, optionally shifted by a fraction of a tile. */
-export function pattern(ctx: CanvasRenderingContext2D, name: string, px: number, shift = 0): CanvasPattern | null {
+export function pattern(ctx: Ctx2D, name: string, px: number, shift = 0): CanvasPattern | null {
   const t = tile(name, px);
   if (!t) return null;
   const p = ctx.createPattern(t, 'repeat');

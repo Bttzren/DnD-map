@@ -5,7 +5,8 @@ import { templateCells } from '../../shared/templates';
 import type { AreaTemplate } from '../../shared/types';
 import { PALETTES } from './palette';
 import { cachePx, drawFog, drawStatic, roundRect } from './staticLayer';
-import { drawStaticTextured } from './texturedLayer';
+import { drawStaticTextured, staticPart } from './texturedLayer';
+import type { StaticReply, StaticRequest } from './staticWorker';
 import { loadTextures, texturesReady } from './textures';
 import type { Overlay, RenderMap, RenderToken } from './types';
 
@@ -50,6 +51,13 @@ export class MapView {
   insets = { top: 0, bottom: 0 };
 
   private staticCanvas = document.createElement('canvas');
+  /** What the map body shows: the canvas above, or a bitmap the worker drew. */
+  private staticSrc: HTMLCanvasElement | ImageBitmap = this.staticCanvas;
+  private staticPx = 32;
+  private worker: Worker | null = null;
+  private reqSeq = 0;
+  private shownSeq = 0;
+  private mapSeqStart = 0;
   private fogCanvas = document.createElement('canvas');
   private px = 32;
   private staticKey = '';
@@ -87,13 +95,52 @@ export class MapView {
     this.bindInput();
     const loop = (t: number) => { this.frame(t); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
-    // Draw with the procedural look straight away, then switch to textures once they arrive.
+    // Textured drawing happens in a worker where the browser supports it; the
+    // quick drawn style shows until the first textured image arrives.
+    if (workerSupported()) {
+      try {
+        this.worker = new Worker(new URL('./staticWorker.ts', import.meta.url), { type: 'module' });
+        this.worker.onmessage = (e: MessageEvent<StaticReply>) => this.onWorker(e.data);
+        this.worker.onerror = () => this.dropWorker();
+      } catch { this.worker = null; }
+    }
+    if (!this.worker) this.loadMainThreadTextures();
+  }
+
+  private loadMainThreadTextures() {
     loadTextures().then((ok) => { if (ok && !this.dead && this.map) this.redrawStatic(); });
+  }
+
+  private dropWorker() {
+    if (!this.worker) return;
+    this.worker.terminate();
+    this.worker = null;
+    this.loadMainThreadTextures();
+  }
+
+  private onWorker(r: StaticReply) {
+    if ('error' in r) { if (r.error === 'no-textures') { this.worker?.terminate(); this.worker = null; } return; }
+    // Only show it if it is newer than what's up and belongs to the current map.
+    if (this.dead || r.seq <= this.shownSeq || r.seq < this.mapSeqStart) { r.bitmap.close(); return; }
+    if (this.staticSrc !== this.staticCanvas) (this.staticSrc as ImageBitmap).close();
+    this.staticSrc = r.bitmap;
+    this.staticPx = r.px;
+    this.shownSeq = r.seq;
+    this.staticCanvas.width = this.staticCanvas.height = 1; // the bitmap replaces it
+  }
+
+  private requestWorker() {
+    const map = this.map;
+    if (!map || !this.worker) return;
+    const req: StaticRequest = { seq: ++this.reqSeq, map: staticPart(map), px: cachePx(map.width, map.height), dm: this.dm };
+    this.worker.postMessage(req);
   }
 
   destroy() {
     this.dead = true;
     clearTimeout(this.pendingStatic);
+    this.worker?.terminate();
+    if (this.staticSrc !== this.staticCanvas) (this.staticSrc as ImageBitmap).close();
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
     this.canvas.remove();
@@ -104,7 +151,18 @@ export class MapView {
     const first = !this.map || !map || this.map.id !== map?.id;
     this.map = map;
     if (!map) return;
-    if (staticKey !== this.staticKey) {
+    if (staticKey !== this.staticKey && this.worker) {
+      this.staticKey = staticKey;
+      const px = cachePx(map.width, map.height);
+      const resized = px !== this.fullPx || this.dims !== `${map.width}x${map.height}`;
+      if (first || resized) {
+        // New map: show the quick drawn style at once, textures follow.
+        this.mapSeqStart = this.reqSeq + 1;
+        this.redrawStatic(false);
+        if (resized) this.fogKey = '';
+      }
+      this.requestWorker();
+    } else if (staticKey !== this.staticKey) {
       this.staticKey = staticKey;
       const px = cachePx(map.width, map.height);
       const resized = px !== this.fullPx || this.dims !== `${map.width}x${map.height}`;
@@ -145,6 +203,10 @@ export class MapView {
     this.px = px;
     if (texturesReady()) drawStaticTextured(map, this.staticCanvas, px, this.dm);
     else drawStatic(map, this.staticCanvas, px, this.dm);
+    if (this.staticSrc !== this.staticCanvas) (this.staticSrc as ImageBitmap).close();
+    this.staticSrc = this.staticCanvas;
+    this.staticPx = px;
+    this.shownSeq = this.reqSeq;
     this.lastStatic = performance.now();
     if (this.dm && !this.fogKey && map.fog) { drawFog(map, this.fogCanvas, px); this.fogKey = 'redrawn'; }
   }
@@ -351,16 +413,16 @@ export class MapView {
     // Map body.
     ctx.save();
     ctx.translate(ox, oy);
-    ctx.scale(z / this.px, z / this.px);
+    ctx.scale(z / this.staticPx, z / this.staticPx);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     // Shadow from a plain rectangle under the map: far cheaper than shadowing the image itself.
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30;
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, this.staticCanvas.width, this.staticCanvas.height);
+    ctx.fillRect(0, 0, map.width * this.staticPx, map.height * this.staticPx);
     ctx.restore();
-    ctx.drawImage(this.staticCanvas, 0, 0);
+    ctx.drawImage(this.staticSrc, 0, 0);
     ctx.restore();
 
     // Water shimmer and lava glow, visible cells only.
@@ -747,4 +809,16 @@ function tokenImage(src: string): HTMLImageElement | null {
   pictures.set(src, im);
   if (pictures.size > 400) pictures.delete(pictures.keys().next().value!);
   return null;
+}
+
+let supported: boolean | null = null;
+/** Can this browser draw textures in a worker? (Needs OffscreenCanvas with 2D.) */
+function workerSupported(): boolean {
+  if (supported !== null) return supported;
+  try {
+    supported = typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap === 'function'
+      && !!new OffscreenCanvas(1, 1).getContext('2d')
+      && !/[?&]noworker\b/.test(location.search);
+  } catch { supported = false; }
+  return supported;
 }

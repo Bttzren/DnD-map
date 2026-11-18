@@ -10,16 +10,26 @@ import { cellNoise } from '../../shared/rng';
 import type { DoorState, ObjectKind, Terrain } from '../../shared/types';
 import { PALETTES } from './palette';
 import { drawObject, roundRect } from './staticLayer';
-import { pattern, THEME_TEXTURES } from './textures';
+import { makeCanvas, pattern, THEME_TEXTURES } from './textures';
 import type { RenderMap } from './types';
+
+/** The parts of a map the static layer draws: small enough to post to a worker. */
+export type StaticMap = Pick<RenderMap, 'id' | 'width' | 'height' | 'theme' | 'terrain' | 'doors' | 'objects'>;
+export const staticPart = (m: RenderMap): StaticMap => ({
+  id: m.id, width: m.width, height: m.height, theme: m.theme, terrain: m.terrain,
+  doors: m.doors.map((d) => ({ ...d })), objects: m.objects.map((o) => ({ ...o })),
+});
 
 type Ctx = CanvasRenderingContext2D;
 type Fill = (c: Ctx) => string | CanvasPattern | CanvasGradient | null;
 interface LayerOpts { alpha?: number; comp?: GlobalCompositeOperation; shadow?: { color: string; blur: number; dx: number; dy: number } }
 
 // Scratch canvases, reused between redraws and shrunk afterwards to free memory.
-let S: HTMLCanvasElement | null = null;
-let M: HTMLCanvasElement | null = null;
+// Works on the main thread or in a worker (OffscreenCanvas), so no DOM here.
+type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
+const ctx2d = (c: AnyCanvas) => c.getContext('2d') as unknown as Ctx;
+let S: AnyCanvas | null = null;
+let M: AnyCanvas | null = null;
 let grid: { key: string; U: Float32Array; V: Float32Array; CX: Int16Array; CY: Int16Array; N: Float32Array; N2: Float32Array } | null = null;
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -37,10 +47,10 @@ function vnoise(x: number, y: number, scale: number, salt: number): number {
 
 const BUILT = new Set(['dungeon', 'crypt', 'sewer', 'tavern']);
 
-export function drawStaticTextured(map: RenderMap, canvas: HTMLCanvasElement, px: number, dm: boolean) {
+export function drawStaticTextured(map: StaticMap, canvas: AnyCanvas, px: number, dm: boolean) {
   const W = map.width, H = map.height, CW = W * px, CH = H * px;
   canvas.width = CW; canvas.height = CH;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = ctx2d(canvas);
   const th = THEME_TEXTURES[map.theme];
   const pal = PALETTES[map.theme];
   const built = BUILT.has(map.theme);
@@ -49,10 +59,10 @@ export function drawStaticTextured(map: RenderMap, canvas: HTMLCanvasElement, px
   // Mask resolution: enough for smooth edges, small enough to compute fast.
   const R = Math.max(4, Math.min(px <= 48 ? 8 : 10, px, Math.floor(720 / Math.max(W, H))));
   const MW = W * R, MH = H * R, NN = MW * MH;
-  S ??= document.createElement('canvas');
-  M ??= document.createElement('canvas');
+  S ??= makeCanvas(1, 1);
+  M ??= makeCanvas(1, 1);
   S.width = CW; S.height = CH; M.width = MW; M.height = MH;
-  const sctx = S.getContext('2d')!, mctx = M.getContext('2d')!;
+  const sctx = ctx2d(S), mctx = ctx2d(M);
   const img = mctx.createImageData(MW, MH);
   const buf = img.data;
   for (let i = 0; i < buf.length; i += 4) { buf[i] = buf[i + 1] = buf[i + 2] = 255; }
@@ -334,7 +344,7 @@ function hashStr(s: string): number {
   return (h >>> 0) % 100000;
 }
 
-function drawRubble(ctx: Ctx, map: RenderMap, px: number) {
+function drawRubble(ctx: Ctx, map: StaticMap, px: number) {
   ctx.save();
   for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) {
     if (map.terrain[y * map.width + x] !== 'rubble') continue;
@@ -352,7 +362,7 @@ function drawRubble(ctx: Ctx, map: RenderMap, px: number) {
   ctx.restore();
 }
 
-function drawTrees(ctx: Ctx, map: RenderMap, px: number, T: (x: number, y: number) => Terrain) {
+function drawTrees(ctx: Ctx, map: StaticMap, px: number, T: (x: number, y: number) => Terrain) {
   const leaf = pattern(ctx, 'grass-dark', px, 0.2) ?? '#2f5a2a';
   const TINTS = ['rgba(25,60,15,0.4)', 'rgba(70,80,15,0.32)', 'rgba(10,45,25,0.48)', 'rgba(45,85,25,0.28)', 'rgba(35,55,10,0.42)'];
   const trees: { cx: number; cy: number; r: number; seed: number; tint: string }[] = [];
