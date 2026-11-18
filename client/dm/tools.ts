@@ -64,7 +64,7 @@ export function attachTools(view: MapView, ctl: DmCtl) {
   let rulerFrom: { x: number; y: number } | null = null;
   let tplDraft: AreaTemplate | null = null;
   /** A placed spell area being dragged to a new spot. */
-  let tplMove: { id: string; fx: number; fy: number; x: number; y: number } | null = null;
+  let tplMove: { id: string; fx: number; fy: number; x: number; y: number; began?: boolean } | null = null;
   let drawing: Drawing | null = null;
   let stroking = false;
 
@@ -152,7 +152,7 @@ export function attachTools(view: MapView, ctl: DmCtl) {
           if (o) {
             ctl.set({ other: o, selected: [] });
             const tp = o.coll === 'templates' ? map.templates.find((x) => x.id === o.id) : undefined;
-            if (tp) { tplMove = { id: tp.id, fx: e.fx, fy: e.fy, x: tp.x, y: tp.y }; ctl.begin(); }
+            if (tp) tplMove = { id: tp.id, fx: e.fx, fy: e.fy, x: tp.x, y: tp.y };
             return true;
           }
           if (map.doors.some((d) => d.x === e.x && d.y === e.y)) { pendingDoorTap = true; return true; }
@@ -183,7 +183,7 @@ export function attachTools(view: MapView, ctl: DmCtl) {
         case 'template': {
           // Grabbing an existing area's centre moves it instead of making a new one.
           const tp = map.templates.find((x) => Math.hypot(x.x - e.fx, x.y - e.fy) < 0.6);
-          if (tp) { ctl.set({ other: { coll: 'templates', id: tp.id }, selected: [] }); tplMove = { id: tp.id, fx: e.fx, fy: e.fy, x: tp.x, y: tp.y }; ctl.begin(); return true; }
+          if (tp) { ctl.set({ other: { coll: 'templates', id: tp.id }, selected: [] }); tplMove = { id: tp.id, fx: e.fx, fy: e.fy, x: tp.x, y: tp.y }; return true; }
           tplDraft = templateFrom(e); setOverlay({ draftTemplate: tplDraft }); return true;
         }
         case 'draw':
@@ -205,7 +205,11 @@ export function attachTools(view: MapView, ctl: DmCtl) {
         if (!tp) return;
         const snap = tp.shape === 'circle' || tp.shape === 'square' ? 1 : 2;
         const nx = Math.round((tplMove.x + e.fx - tplMove.fx) * snap) / snap, ny = Math.round((tplMove.y + e.fy - tplMove.fy) * snap) / snap;
-        if (nx !== tp.x || ny !== tp.y) ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'templates', item: { ...tp, x: nx, y: ny } });
+        if (nx !== tp.x || ny !== tp.y) {
+          // One undo step per drag, started only once it actually moves.
+          if (!tplMove.began) { ctl.begin(); tplMove.began = true; }
+          ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'templates', item: { ...tp, x: nx, y: ny } });
+        }
         return;
       }
       if (tool === 'select' && drag) {
@@ -279,7 +283,7 @@ export function attachTools(view: MapView, ctl: DmCtl) {
         setOverlay({ dragging: undefined, ruler: null });
       }
       if (stroking) { ctl.end(); stroking = false; }
-      if (tplMove) { ctl.end(); tplMove = null; }
+      if (tplMove) { if (tplMove.began) ctl.end(); tplMove = null; }
       if (map && tool === 'ruler') { rulerFrom = null; setTimeout(() => { if (!rulerFrom) setOverlay({ ruler: null }); }, 1500); }
       if (map && tool === 'template' && tplDraft) {
         ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'templates', item: tplDraft });
@@ -295,6 +299,7 @@ export function attachTools(view: MapView, ctl: DmCtl) {
 
     cancel() {
       if (stroking) { ctl.end(); stroking = false; }
+      if (tplMove) { if (tplMove.began) ctl.end(); tplMove = null; }
       drag = null; rulerFrom = null; tplDraft = null; drawing = null; pendingDoorTap = false;
       setOverlay({ dragging: undefined, ruler: null, draftTemplate: null, draftDrawing: null });
     },
