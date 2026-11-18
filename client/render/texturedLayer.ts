@@ -8,7 +8,7 @@
 // a little, so every square still reads as what it is under the grid.
 import { cellNoise } from '../../shared/rng';
 import type { DoorState, ObjectKind, Terrain } from '../../shared/types';
-import { PALETTES } from './palette';
+import { PALETTES, PLAYER_VOID } from './palette';
 import { drawObject, roundRect } from './staticLayer';
 import { makeCanvas, pattern, THEME_TEXTURES } from './textures';
 import type { RenderMap } from './types';
@@ -297,7 +297,7 @@ export function drawStaticTextured(map: StaticMap, canvas: AnyCanvas, px: number
       else if (t === 'wall') A[k] = (built ? smooth(1 - near(vv, k, 1, 1, 1) / fadeWall + n) : rag) * (dm ? 0.75 : 0.95);
       else A[k] = 0;
     }
-    if (dm) layer(tex(th.voidDm)); else layer(pal.void);
+    if (dm) layer(tex(th.voidDm)); else layer(PLAYER_VOID);
   }
 
   // 6. Trees, doors, objects.

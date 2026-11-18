@@ -2,7 +2,7 @@
 // objects) into an offscreen canvas, so each frame is one drawImage.
 import { cellNoise } from '../../shared/rng';
 import type { ObjectKind, Terrain } from '../../shared/types';
-import { PALETTES, shade, type Palette } from './palette';
+import { PALETTES, PLAYER_VOID, shade, type Palette } from './palette';
 import type { RenderMap } from './types';
 
 export function cachePx(w: number, h: number): number {
@@ -21,10 +21,10 @@ export function drawStatic(map: RenderMap, canvas: HTMLCanvasElement | Offscreen
   const p = PALETTES[map.theme];
   const T = (x: number, y: number): Terrain => (x < 0 || y < 0 || x >= W || y >= H ? 'void' : map.terrain[y * W + x]);
 
-  ctx.fillStyle = p.void;
+  ctx.fillStyle = dm ? p.void : PLAYER_VOID;
   ctx.fillRect(0, 0, W * px, H * px);
-  // Faint rock speckle in the void.
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+  // Faint rock speckle in the void (the DM's view only: for players it is the unknown).
+  if (dm) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (T(x, y) !== 'void') continue;
     const n = cellNoise(x, y, 7);
     if (n > 0.7) { ctx.fillStyle = 'rgba(255,255,255,0.025)'; ctx.fillRect(x * px + n * px * 0.6, y * px + (1 - n) * px * 0.6, px * 0.18, px * 0.18); }

@@ -40,6 +40,9 @@ const base: Palette = {
   pattern: 'flagstone',
 };
 
+/** What players see where they don't know the map: the same as their page, so no box shows. */
+export const PLAYER_VOID = '#0b0a0e';
+
 export const PALETTES: Record<Theme, Palette> = {
   dungeon: base,
   crypt: { ...base, floor: '#5f6168', floorAlt: '#565860', wall: '#22232a', wallTop: '#30323a', wallEdge: '#80838f', void: '#0a0a0e', rubble: '#7a7c84' },

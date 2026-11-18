@@ -51,7 +51,8 @@ function PlayerView(p: { code: string; name: string }) {
   const screenRef = useRef(screen); screenRef.current = screen;
   const connRef = useRef<Connection | null>(null);
   const [picSheet, setPicSheet] = useState(false);
-  const [bottomInset, setBottomInset] = useState(120);
+  // Toasts float just above the buttons and party chips here.
+  useEffect(() => { document.body.classList.add('is-player'); return () => document.body.classList.remove('is-player'); }, []);
   const meKey = `me:${p.code}`;
   const [me, setMeState] = useState<string | null>(() => pref.get<string | null>(meKey, null));
   const meRef = useRef(me); meRef.current = me;
@@ -105,7 +106,7 @@ function PlayerView(p: { code: string; name: string }) {
       const next = { top: topRef.current?.getBoundingClientRect().bottom ?? 0, bottom: bottomRef.current ? window.innerHeight - bottomRef.current.getBoundingClientRect().top : 0 };
       const changed = Math.abs(next.top - view.insets.top) > 4 || Math.abs(next.bottom - view.insets.bottom) > 4;
       view.insets = next;
-      if (changed) setBottomInset(next.bottom);
+      if (changed) { document.body.style.setProperty('--pl-bottom', `${Math.round(next.bottom)}px`); }
       if (changed && stat && !view.userMoved && !screenRef.current.followDm) view.fit();
     };
     measure();
@@ -167,6 +168,7 @@ function PlayerView(p: { code: string; name: string }) {
   }, []);
 
   dynRef.current = dyn;
+  const nothingYet = !!stat && !stat.terrain.some((t) => t !== 'void') && !(dyn?.tokens.length);
   const init = dyn?.initiative;
   const map = stat;
   const party = (dyn?.tokens ?? []).filter((t) => t.kind === 'player');
@@ -187,6 +189,10 @@ function PlayerView(p: { code: string; name: string }) {
           {fighting && <TurnOrder init={init!} tokens={dyn!.tokens} img={img} onPick={focus} />}
           {screen.banner && <div class="banner">{screen.banner}</div>}
         </div>
+      )}
+
+      {!screen.blank && nothingYet && (
+        <div class="pl-nothing"><span class="muted">The DM hasn’t revealed any of the map yet.</span></div>
       )}
 
       {tip && (

@@ -441,11 +441,14 @@ export class MapView {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     // Shadow from a plain rectangle under the map: far cheaper than shadowing the image itself.
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, map.width * this.staticPx, map.height * this.staticPx);
-    ctx.restore();
+    // (The DM's view only: players shouldn't see the map's outline in the dark.)
+    if (this.dm) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, map.width * this.staticPx, map.height * this.staticPx);
+      ctx.restore();
+    }
     ctx.drawImage(this.staticSrc, 0, 0);
     ctx.restore();
 
