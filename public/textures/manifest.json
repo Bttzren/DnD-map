@@ -1,0 +1,62 @@
+{
+  "dirt": {
+    "meters": 2.0
+  },
+  "dirt-forest": {
+    "meters": 1.3
+  },
+  "floor-cave": {
+    "meters": 2.7
+  },
+  "floor-crypt": {
+    "meters": 2.0
+  },
+  "floor-dungeon": {
+    "meters": 1.96
+  },
+  "floor-sewer": {
+    "meters": 2.0
+  },
+  "floor-tavern": {
+    "meters": 2.0
+  },
+  "grass": {
+    "meters": 2.0
+  },
+  "grass-dark": {
+    "meters": 2.0
+  },
+  "lava": {
+    "meters": 1.5
+  },
+  "pit": {
+    "meters": 2.0
+  },
+  "riverbed": {
+    "meters": 2.0
+  },
+  "rock": {
+    "meters": 1.5
+  },
+  "rubble": {
+    "meters": 2.001
+  },
+  "street": {
+    "meters": 2.0
+  },
+  "wall-cave": {
+    "meters": 1.8
+  },
+  "wall-crypt": {
+    "meters": 1.8
+  },
+  "wall-dungeon": {
+    "meters": 2.5
+  },
+  "wall-sewer": {
+    "meters": 2.5
+  },
+  "wall-tavern": {
+    "meters": 2.0
+  }
+}
