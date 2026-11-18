@@ -195,6 +195,10 @@ describe('server', () => {
     d.send({ type: 'roll', expr: 'd4', label: 'public' });
     await p1.next('roll', (m) => m.roll.label === 'public');
     for (const raw of [...p1.raw, ...p2.raw]) expect(raw).not.toContain('SECRET-STEALTH-CHECK');
+
+    // Roll spam is limited too.
+    for (let i = 0; i < 11; i++) p1.send({ type: 'roll', expr: 'd6' });
+    expect((await p1.next('error', (m) => /Too many rolls/.test(m.message ?? ''))).code).toBe('not-allowed');
   });
 
   it('rejects a wrong DM secret and player ops', async () => {

@@ -123,7 +123,13 @@ export class MapView {
   }
 
   private onWorker(r: StaticReply) {
-    if ('error' in r) { if (r.error === 'no-textures') { this.worker?.terminate(); this.worker = null; } return; }
+    if ('error' in r) {
+      if (r.error === 'no-textures') { this.worker?.terminate(); this.worker = null; return; }
+      // Drawing failed in the worker on this browser: draw on the main thread instead.
+      console.warn('[map] worker drawing failed, using the main thread:', r.error);
+      this.dropWorker();
+      return;
+    }
     // Only show it if it is newer than what's up and belongs to the current map.
     if (this.dead || r.seq <= this.shownSeq || r.seq < this.mapSeqStart) { r.bitmap.close(); return; }
     if (this.staticSrc !== this.staticCanvas) (this.staticSrc as ImageBitmap).close();
@@ -136,7 +142,8 @@ export class MapView {
   private requestWorker() {
     const map = this.map;
     if (!map || !this.worker) return;
-    const req: StaticRequest = { seq: ++this.reqSeq, map: staticPart(map), px: cachePx(map.width, map.height), dm: this.dm };
+    const req: StaticRequest & { failForTest?: boolean } = { seq: ++this.reqSeq, map: staticPart(map), px: cachePx(map.width, map.height), dm: this.dm };
+    if (/[?&]workerfail\b/.test(location.search)) req.failForTest = true;
     this.worker.postMessage(req);
   }
 

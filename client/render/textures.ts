@@ -101,7 +101,9 @@ export function pattern(ctx: Ctx2D, name: string, px: number, shift = 0): Canvas
   if (!t) return null;
   const p = ctx.createPattern(t, 'repeat');
   if (!p) return null;
-  if (shift) p.setTransform(new DOMMatrix().translate(t.width * shift, t.width * shift * 1.618));
+  if (shift) {
+    try { p.setTransform(new DOMMatrix().translate(t.width * shift, t.width * shift * 1.618)); } catch { /* unshifted is fine */ }
+  }
   return p;
 }
 

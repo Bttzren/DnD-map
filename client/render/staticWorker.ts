@@ -8,6 +8,8 @@ export interface StaticRequest { seq: number; map: StaticMap; px: number; dm: bo
 export type StaticReply = { seq: number; bitmap: ImageBitmap; px: number } | { seq: number; error: string };
 
 const ready = loadTextures();
+// `?workerfail` on the page makes the worker fail, to test the fallback.
+let failForTest = false;
 let pending: StaticRequest | null = null;
 let busy = false;
 
@@ -21,6 +23,7 @@ async function run() {
     pending = null;
     if (!ok) { post({ seq: req.seq, error: 'no-textures' }); continue; }
     try {
+      if (failForTest) throw new Error('test failure');
       const c = new OffscreenCanvas(req.map.width * req.px, req.map.height * req.px);
       drawStaticTextured(req.map, c, req.px, req.dm);
       const bitmap = c.transferToImageBitmap();
@@ -34,7 +37,8 @@ async function run() {
   busy = false;
 }
 
-self.onmessage = (e: MessageEvent<StaticRequest>) => {
+self.onmessage = (e: MessageEvent<StaticRequest & { failForTest?: boolean }>) => {
+  failForTest = !!e.data.failForTest;
   pending = e.data;
   if (!busy) void run();
 };
