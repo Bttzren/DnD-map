@@ -79,7 +79,8 @@ export function applyOp(game: Game, op: Op): Game {
     case 'image.put': {
       if (!isImageId(op.id) || !isImageData(op.data)) break;
       const images = (game.images ??= {});
-      if (!(op.id in images) && Object.keys(images).length >= MAX_IMAGES) pruneImages(game);
+      // Clear out pictures nothing uses any more (replaced or removed ones).
+      if (!(op.id in images)) pruneImages(game);
       if (op.id in images || Object.keys(images).length < MAX_IMAGES) images[op.id] = op.data;
       break;
     }

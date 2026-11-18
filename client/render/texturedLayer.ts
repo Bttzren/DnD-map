@@ -20,6 +20,7 @@ interface LayerOpts { alpha?: number; comp?: GlobalCompositeOperation; shadow?: 
 // Scratch canvases, reused between redraws and shrunk afterwards to free memory.
 let S: HTMLCanvasElement | null = null;
 let M: HTMLCanvasElement | null = null;
+let grid: { key: string; U: Float32Array; V: Float32Array; CX: Int16Array; CY: Int16Array; N: Float32Array; N2: Float32Array } | null = null;
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (v: number) => { const t = clamp01(v); return t * t * (3 - 2 * t); };
@@ -46,7 +47,7 @@ export function drawStaticTextured(map: RenderMap, canvas: HTMLCanvasElement, px
   const T = (x: number, y: number): Terrain => (x < 0 || y < 0 || x >= W || y >= H ? 'void' : map.terrain[y * W + x]);
 
   // Mask resolution: enough for smooth edges, small enough to compute fast.
-  const R = Math.max(4, Math.min(12, px, Math.floor(720 / Math.max(W, H))));
+  const R = Math.max(4, Math.min(px <= 48 ? 8 : 10, px, Math.floor(720 / Math.max(W, H))));
   const MW = W * R, MH = H * R, NN = MW * MH;
   S ??= document.createElement('canvas');
   M ??= document.createElement('canvas');
@@ -57,17 +58,22 @@ export function drawStaticTextured(map: RenderMap, canvas: HTMLCanvasElement, px
   for (let i = 0; i < buf.length; i += 4) { buf[i] = buf[i + 1] = buf[i + 2] = 255; }
   const A = new Float32Array(NN);
 
-  // Per-pixel cell coordinates and two noise fields (-0.5..0.5): fine wobble and broad patches.
-  const U = new Float32Array(NN), V = new Float32Array(NN);
-  const CX = new Int16Array(NN), CY = new Int16Array(NN);
-  const N = new Float32Array(NN), N2 = new Float32Array(NN);
+  // Per-pixel cell coordinates and two noise fields (-0.5..0.5): fine wobble and
+  // broad patches. They only depend on the map's size and id, so they are kept
+  // between redraws (players redraw on every fog reveal).
   const salt = hashStr(map.id);
-  for (let j = 0, k = 0; j < MH; j++) for (let i = 0; i < MW; i++, k++) {
-    const u = (i + 0.5) / R, v = (j + 0.5) / R;
-    U[k] = u; V[k] = v; CX[k] = Math.floor(u); CY[k] = Math.floor(v);
-    N[k] = (vnoise(u, v, 0.9, salt) * 0.65 + vnoise(u, v, 0.35, salt + 1) * 0.35) - 0.5;
-    N2[k] = vnoise(u, v, 4.5, salt + 2) * 0.7 + vnoise(u, v, 1.7, salt + 3) * 0.3 - 0.5;
+  const gkey = `${W}x${H}@${R}#${salt}`;
+  if (grid?.key !== gkey) {
+    const g = { key: gkey, U: new Float32Array(NN), V: new Float32Array(NN), CX: new Int16Array(NN), CY: new Int16Array(NN), N: new Float32Array(NN), N2: new Float32Array(NN) };
+    for (let j = 0, k = 0; j < MH; j++) for (let i = 0; i < MW; i++, k++) {
+      const u = (i + 0.5) / R, v = (j + 0.5) / R;
+      g.U[k] = u; g.V[k] = v; g.CX[k] = Math.floor(u); g.CY[k] = Math.floor(v);
+      g.N[k] = (vnoise(u, v, 0.9, salt) * 0.65 + vnoise(u, v, 0.35, salt + 1) * 0.35) - 0.5;
+      g.N2[k] = vnoise(u, v, 4.5, salt + 2) * 0.7 + vnoise(u, v, 1.7, salt + 3) * 0.3 - 0.5;
+    }
+    grid = g;
   }
+  const { U, V, CX, CY, N, N2 } = grid;
 
   const cells = (pred: (t: Terrain) => boolean) => {
     const a = new Uint8Array(W * H);
@@ -76,10 +82,29 @@ export function drawStaticTextured(map: RenderMap, canvas: HTMLCanvasElement, px
     return any ? a : null;
   };
   const at = (a: Uint8Array, x: number, y: number, oob: number) => (x < 0 || y < 0 || x >= W || y >= H ? oob : a[y * W + x]);
+  /** Per cell: 1 if any neighbour differs from it. Most cells don't, and those need no maths. */
+  const mixedCache = new Map<Uint8Array, Map<number, Uint8Array>>();
+  const mixedOf = (a: Uint8Array, oob: number) => {
+    let byOob = mixedCache.get(a);
+    if (!byOob) mixedCache.set(a, (byOob = new Map()));
+    let m = byOob.get(oob);
+    if (m) return m;
+    m = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const own = a[y * W + x];
+      let diff = 0;
+      for (let dy = -1; dy <= 1 && !diff; dy++) for (let dx = -1; dx <= 1; dx++) if (at(a, x + dx, y + dy, oob) !== own) { diff = 1; break; }
+      m[y * W + x] = diff;
+    }
+    byOob.set(oob, m);
+    return m;
+  };
 
   /** Share of a (2h)-wide square around (u, v) covered by the cell set: 0.5 on an edge, rounded at corners. */
   const box = (a: Uint8Array, k: number, h: number, oob = 0) => {
     const u = U[k], v = V[k], cx = CX[k], cy = CY[k];
+    const c = cy * W + cx;
+    if (!mixedOf(a, oob)[c]) return a[c];
     let s = 0;
     for (let dy = -1; dy <= 1; dy++) {
       const y0 = cy + dy, oy = Math.min(v + h, y0 + 1) - Math.max(v - h, y0);
@@ -95,6 +120,8 @@ export function drawStaticTextured(map: RenderMap, canvas: HTMLCanvasElement, px
   /** Distance in squares from (u, v) to the nearest cell whose value is `want`, up to `cap`. */
   const near = (a: Uint8Array, k: number, want: number, oob: number, cap: number) => {
     const u = U[k], v = V[k], cx = CX[k], cy = CY[k];
+    const c = cy * W + cx;
+    if (!mixedOf(a, oob)[c]) return a[c] === want ? 0 : cap;
     let best = cap;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       if (at(a, cx + dx, cy + dy, oob) !== want) continue;
@@ -254,8 +281,10 @@ export function drawStaticTextured(map: RenderMap, canvas: HTMLCanvasElement, px
     for (let k = 0; k < NN; k++) {
       const t = map.terrain[CY[k] * W + CX[k]];
       const n = N[k] * 0.3;
-      if (t === 'void') A[k] = open ? smooth(near(open, k, 1, 0, 1) / 0.7 + n) : 1;
-      else if (t === 'wall') A[k] = smooth(1 - near(vv, k, 1, 1, 1) / fadeWall + n) * (dm ? 0.75 : 0.95);
+      // Natural rock: a ragged, rounded edge between the walls and the unknown, like the walls themselves.
+      const rag = built ? 1 : smooth((box(vv, k, 0.5, 1) - 0.5 + N[k] * 0.45 + 0.12) / 0.28 + 0.5);
+      if (t === 'void') A[k] = (open ? smooth(near(open, k, 1, 0, 1) / 0.7 + n) : 1) * (built ? 1 : Math.max(rag, 0.75 + 0.25 * rag));
+      else if (t === 'wall') A[k] = (built ? smooth(1 - near(vv, k, 1, 1, 1) / fadeWall + n) : rag) * (dm ? 0.75 : 0.95);
       else A[k] = 0;
     }
     if (dm) layer(tex(th.voidDm)); else layer(pal.void);

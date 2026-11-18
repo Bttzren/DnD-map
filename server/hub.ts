@@ -226,8 +226,12 @@ export class Hub {
   /** A token picture, for the image endpoint. */
   async image(code: string, id: string): Promise<string | null> {
     if (!isImageId(id)) return null;
-    const room = await this.getRoom(normalizeCode(code));
-    return room?.game.images?.[id] ?? null;
+    const c = normalizeCode(code);
+    const live = this.rooms.get(c);
+    if (live) return live.game.images?.[id] ?? null;
+    // Read a closed game straight from disk, without keeping it loaded.
+    const rec = await this.o.store.load(c);
+    return rec?.game.images?.[id] ?? null;
   }
 
   private async join(c: Client, msg: Extract<ClientMsg, { type: 'join' }>) {
