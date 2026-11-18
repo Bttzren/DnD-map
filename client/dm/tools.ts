@@ -1,6 +1,7 @@
 // Turns pointer input on the DM's map into ops, per tool.
 import { distanceFt } from '../../shared/distance';
 import { DIRS8, footprint, idx, inBounds, isOpen } from '../../shared/grid';
+import { templateCells } from '../../shared/templates';
 import { uid, type AreaTemplate, type Drawing, type MapData, type Terrain, type Token } from '../../shared/types';
 import type { CellEvent, MapView } from '../render/mapView';
 import { promptDialog } from '../ui';
@@ -14,11 +15,19 @@ export function tokenAt(map: MapData, x: number, y: number): Token | undefined {
 function otherAt(map: MapData, fx: number, fy: number): Selection | null {
   const l = map.labels.find((l) => Math.abs(l.x - fx) < 1.2 && Math.abs(l.y - fy) < 0.6);
   if (l) return { coll: 'labels', id: l.id };
-  const t = map.templates.find((t) => Math.hypot(t.x - fx, t.y - fy) < 0.8);
+  const t = templateAt(map, fx, fy);
   if (t) return { coll: 'templates', id: t.id };
   const d = map.drawings.find((d) => d.points.some(([x, y]) => Math.hypot(x - fx, y - fy) < 0.45));
   if (d) return { coll: 'drawings', id: d.id };
   return null;
+}
+
+/** A spell area at this point: near its origin, or (newest first) covering the square. */
+export function templateAt(map: MapData, fx: number, fy: number): AreaTemplate | undefined {
+  const near = map.templates.find((t) => Math.hypot(t.x - fx, t.y - fy) < 0.8);
+  if (near) return near;
+  const c = Math.floor(fy) * map.width + Math.floor(fx);
+  return map.templates.slice().reverse().find((t) => templateCells(t, map).includes(c));
 }
 
 /** Cells along a line between two cells (inclusive), for smooth brush strokes. */
@@ -54,6 +63,8 @@ export function attachTools(view: MapView, ctl: DmCtl) {
   let pendingDoorTap = false;
   let rulerFrom: { x: number; y: number } | null = null;
   let tplDraft: AreaTemplate | null = null;
+  /** A placed spell area being dragged to a new spot. */
+  let tplMove: { id: string; fx: number; fy: number; x: number; y: number } | null = null;
   let drawing: Drawing | null = null;
   let stroking = false;
 
@@ -110,6 +121,7 @@ export function attachTools(view: MapView, ctl: DmCtl) {
     return {
       id: uid('tpl'), shape: opts.tplShape, x: snap ? Math.round(e.fx) : Math.round(e.fx * 2) / 2, y: snap ? Math.round(e.fy) : Math.round(e.fy * 2) / 2,
       sizeFt: opts.tplSize, angle: 0, color: opts.tplColor, hidden: false,
+      ...(opts.tplLabel ? { label: opts.tplLabel } : {}), ...(opts.tplEffect !== 'plain' ? { effect: opts.tplEffect } : {}),
     };
   };
 
@@ -137,7 +149,12 @@ export function attachTools(view: MapView, ctl: DmCtl) {
             return true;
           }
           const o = otherAt(map, e.fx, e.fy);
-          if (o) { ctl.set({ other: o, selected: [] }); return true; }
+          if (o) {
+            ctl.set({ other: o, selected: [] });
+            const tp = o.coll === 'templates' ? map.templates.find((x) => x.id === o.id) : undefined;
+            if (tp) { tplMove = { id: tp.id, fx: e.fx, fy: e.fy, x: tp.x, y: tp.y }; ctl.begin(); }
+            return true;
+          }
           if (map.doors.some((d) => d.x === e.x && d.y === e.y)) { pendingDoorTap = true; return true; }
           if (!e.shift) ctl.set({ selected: [], other: null });
           return false;
@@ -163,7 +180,12 @@ export function attachTools(view: MapView, ctl: DmCtl) {
           rulerFrom = t ? { x: t.x + (t.size - 1) / 2, y: t.y + (t.size - 1) / 2 } : { x: e.x, y: e.y };
           return true;
         }
-        case 'template': tplDraft = templateFrom(e); setOverlay({ draftTemplate: tplDraft }); return true;
+        case 'template': {
+          // Grabbing an existing area's centre moves it instead of making a new one.
+          const tp = map.templates.find((x) => Math.hypot(x.x - e.fx, x.y - e.fy) < 0.6);
+          if (tp) { ctl.set({ other: { coll: 'templates', id: tp.id }, selected: [] }); tplMove = { id: tp.id, fx: e.fx, fy: e.fy, x: tp.x, y: tp.y }; ctl.begin(); return true; }
+          tplDraft = templateFrom(e); setOverlay({ draftTemplate: tplDraft }); return true;
+        }
         case 'draw':
           drawing = { id: uid('drw'), points: [[e.fx, e.fy]], color: opts.drawColor, width: opts.drawWidth, hidden: opts.drawHidden };
           setOverlay({ draftDrawing: drawing });
@@ -178,6 +200,14 @@ export function attachTools(view: MapView, ctl: DmCtl) {
       const { tool, opts } = ctl.state;
       const prev = last;
       last = { x: e.x, y: e.y };
+      if (tplMove) {
+        const tp = map.templates.find((x) => x.id === tplMove!.id);
+        if (!tp) return;
+        const snap = tp.shape === 'circle' || tp.shape === 'square' ? 1 : 2;
+        const nx = Math.round((tplMove.x + e.fx - tplMove.fx) * snap) / snap, ny = Math.round((tplMove.y + e.fy - tplMove.fy) * snap) / snap;
+        if (nx !== tp.x || ny !== tp.y) ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'templates', item: { ...tp, x: nx, y: ny } });
+        return;
+      }
       if (tool === 'select' && drag) {
         const dx = e.x - drag.start.x, dy = e.y - drag.start.y;
         if (dx || dy) drag.moved = true;
@@ -249,6 +279,7 @@ export function attachTools(view: MapView, ctl: DmCtl) {
         setOverlay({ dragging: undefined, ruler: null });
       }
       if (stroking) { ctl.end(); stroking = false; }
+      if (tplMove) { ctl.end(); tplMove = null; }
       if (map && tool === 'ruler') { rulerFrom = null; setTimeout(() => { if (!rulerFrom) setOverlay({ ruler: null }); }, 1500); }
       if (map && tool === 'template' && tplDraft) {
         ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'templates', item: tplDraft });

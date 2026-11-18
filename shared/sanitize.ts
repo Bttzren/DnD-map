@@ -2,10 +2,10 @@
 // clean it into the exact shapes the rest of the code relies on.
 import type { Coll, CollTypes } from './ops';
 import {
-  AMBIENCES, DISTANCE_RULES, DOOR_STATES, HP_VISIBILITY, OBJECT_KINDS, TEMPLATE_SHAPES, THEMES, TOKEN_KINDS,
+  AMBIENCES, DISTANCE_RULES, DOOR_STATES, HP_VISIBILITY, OBJECT_KINDS, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, THEMES, TOKEN_KINDS,
   MAX_IMAGES, defaultScreen, defaultSettings, isImageData, isImageId,
   type AreaTemplate, type Door, type Drawing, type Initiative, type Label, type MapData, type MapObject,
-  type MapSettings, type Room, type ScreenState, type Token,
+  type InitiativeEntry, type MapSettings, type Room, type ScreenState, type Token,
 } from './types';
 
 type Dims = { width: number; height: number };
@@ -76,6 +76,8 @@ function template(r: Raw, m: Dims): AreaTemplate | null {
   };
   const label = str(r.label, 24);
   if (label) t.label = label;
+  const effect = oneOf(r.effect, TEMPLATE_EFFECTS, 'plain');
+  if (effect !== 'plain') t.effect = effect;
   return t;
 }
 
@@ -131,8 +133,15 @@ export function sanitizeSettings(raw: unknown, base: MapSettings = defaultSettin
 export function sanitizeInitiative(raw: unknown): Initiative {
   const r = obj(raw);
   const entries = (Array.isArray(r.entries) ? r.entries : []).slice(0, 200)
-    .map((e) => { const o = obj(e); const tid = id(o.tokenId); return tid ? { tokenId: tid, init: int(o.init, 0, -99, 999) } : null; })
-    .filter((e): e is { tokenId: string; init: number } => !!e);
+    .map((e) => {
+      const o = obj(e); const tid = id(o.tokenId);
+      if (!tid) return null;
+      const out: InitiativeEntry = { tokenId: tid, init: int(o.init, 0, -99, 999) };
+      const name = str(o.name, 30).trim();
+      if (name) { out.name = name; out.color = color(o.color, '#71717a'); if (bool(o.hidden)) out.hidden = true; }
+      return out;
+    })
+    .filter((e): e is InitiativeEntry => !!e);
   return { entries, turn: int(r.turn, -1, -1, Math.max(-1, entries.length - 1)), round: int(r.round, 0, 0, 9999), visible: bool(r.visible) };
 }
 

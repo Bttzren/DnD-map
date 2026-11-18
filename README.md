@@ -73,7 +73,7 @@ blank and paint.
 | `O` | Objects | Chests, tables, pillars, altars, traps (can be hidden) and more |
 | `F` | Fog of war | Reveal or hide a whole room in one click, or brush it |
 | `R` | Measure | Drag to measure; starting on a token measures from it |
-| `T` | Spell areas | Circles, cones, lines and squares that show the squares they cover |
+| `T` | Spell areas | Pick a spell (Fireball, Cone of Cold, Lightning Bolt and more) or any shape and size. Animated fire, frost, lightning, poison, darkness and more, over the squares they cover. Drag a placed area's centre to move it; click it to resize, rotate, restyle and see who's caught |
 | `P` | Draw | Freehand, visible to players or just you |
 | `L` | Label | Text on the map |
 | `G` | Ping | Flash a spot for everyone; shift-click also pulls their view there |
@@ -92,9 +92,11 @@ change the brush, `Tab` toggles the side panel, and holding `Space` pans.
 - **Pictures:** give any token a picture from your files (in its inspector,
   **Upload**). Added a batch of goblins? Picture one, then **Use for the other
   goblins**.
-- **Initiative:** add the party and foes, roll for monsters, and press `N` for
-  each turn. The active creature glows on every screen. Players only see
-  creatures they can see.
+- **Initiative:** type the order in ("Thalia 18", "Lair actions 20"; a
+  token's name adds that token, anything else is added as written), or add
+  the party and foes with a click and roll for monsters. Reorder with the
+  arrows and press `N` for each turn. The active creature glows on every
+  screen. Players only see creatures they can see, and entries you hide.
 - **Map:** keep several maps. Edit one privately while players look at
   another, then press **Show this map**. Weather (rain, snow, mist, embers,
   darkness), the diagonal rule (5 ft, 5/10, or exact), grid strength, moving

@@ -9,6 +9,7 @@ import { drawStaticTextured, staticPart } from './texturedLayer';
 import type { StaticReply, StaticRequest } from './staticWorker';
 import { loadTextures, texturesReady } from './textures';
 import type { Overlay, RenderMap, RenderToken } from './types';
+import { EFFECTS } from './spells';
 
 export interface CellEvent {
   /** Fractional cell coordinates. */
@@ -500,7 +501,7 @@ export class MapView {
 
     // Area templates.
     const templates = [...map.templates, ...(this.overlay.draftTemplate ? [this.overlay.draftTemplate] : [])];
-    for (const tp of templates) this.drawTemplate(tp, ox, oy, z, map, tp === this.overlay.draftTemplate);
+    for (const tp of templates) this.drawTemplate(tp, ox, oy, z, map, tp === this.overlay.draftTemplate, t);
 
     // Drawings.
     const drawings = [...map.drawings, ...(this.overlay.draftDrawing ? [this.overlay.draftDrawing] : [])];
@@ -601,42 +602,180 @@ export class MapView {
     this.drawAmbience(map.settings.ambience, dt, w, h, t);
   }
 
-  private drawTemplate(tp: AreaTemplate, ox: number, oy: number, z: number, map: RenderMap, draft: boolean) {
+  private drawTemplate(tp: AreaTemplate, ox: number, oy: number, z: number, map: RenderMap, draft: boolean, t: number) {
     const ctx = this.ctx;
-    ctx.save();
-    ctx.globalAlpha = tp.hidden ? 0.5 : 1;
-    ctx.fillStyle = hexA(tp.color, 0.28);
-    for (const c of templateCells(tp, map)) {
-      const x = c % map.width, y = Math.floor(c / map.width);
-      ctx.fillRect(ox + x * z, oy + y * z, z, z);
-    }
-    ctx.strokeStyle = tp.color; ctx.lineWidth = 2;
-    if (draft || tp.hidden) ctx.setLineDash([6, 4]);
+    const fx = EFFECTS[tp.effect ?? 'plain'];
+    const plain = fx.style === 'plain';
+    const tint = plain ? tp.color : fx.mid;
+    const seed = hashId(tp.id);
     const o = { x: ox + tp.x * z, y: oy + tp.y * z };
     const len = (tp.sizeFt / 5) * z;
     const a = (tp.angle * Math.PI) / 180;
-    ctx.beginPath();
-    if (tp.shape === 'circle') ctx.arc(o.x, o.y, len, 0, Math.PI * 2);
-    else if (tp.shape === 'square') ctx.rect(o.x - len / 2, o.y - len / 2, len, len);
-    else if (tp.shape === 'line') {
-      const dx = Math.cos(a), dy = Math.sin(a), nx = -dy * z * 0.5, ny = dx * z * 0.5;
-      ctx.moveTo(o.x + nx, o.y + ny); ctx.lineTo(o.x + dx * len + nx, o.y + dy * len + ny);
-      ctx.lineTo(o.x + dx * len - nx, o.y + dy * len - ny); ctx.lineTo(o.x - nx, o.y - ny); ctx.closePath();
-    } else {
-      const half = Math.atan(0.5);
-      ctx.moveTo(o.x, o.y);
-      ctx.arc(o.x, o.y, len, a - half, a + half);
-      ctx.closePath();
+    const dx = Math.cos(a), dy = Math.sin(a);
+    // Middle of the area, for effects that radiate from inside it.
+    const mid = tp.shape === 'circle' || tp.shape === 'square' ? o : { x: o.x + dx * len * 0.5, y: o.y + dy * len * 0.5 };
+    const reach = tp.shape === 'circle' ? len : tp.shape === 'square' ? len * 0.72 : len * 0.55;
+    const rnd = (i: number, k: number) => cellNoise(seed, i, k);
+    const path = () => {
+      ctx.beginPath();
+      if (tp.shape === 'circle') ctx.arc(o.x, o.y, len, 0, Math.PI * 2);
+      else if (tp.shape === 'square') ctx.rect(o.x - len / 2, o.y - len / 2, len, len);
+      else if (tp.shape === 'line') {
+        const nx = -dy * z * 0.5, ny = dx * z * 0.5;
+        ctx.moveTo(o.x + nx, o.y + ny); ctx.lineTo(o.x + dx * len + nx, o.y + dy * len + ny);
+        ctx.lineTo(o.x + dx * len - nx, o.y + dy * len - ny); ctx.lineTo(o.x - nx, o.y - ny); ctx.closePath();
+      } else {
+        const half = Math.atan(0.5);
+        ctx.moveTo(o.x, o.y); ctx.arc(o.x, o.y, len, a - half, a + half); ctx.closePath();
+      }
+    };
+
+    ctx.save();
+    ctx.globalAlpha = tp.hidden ? 0.55 : 1;
+
+    // The squares it covers, faintly, so the rules stay clear under the effect.
+    const cells = templateCells(tp, map);
+    ctx.fillStyle = hexA(tint, fx.style === 'dark' ? 0.25 : 0.16);
+    for (const c of cells) ctx.fillRect(ox + (c % map.width) * z, oy + Math.floor(c / map.width) * z, z, z);
+
+    // The effect itself, clipped to the true shape.
+    ctx.save();
+    path(); ctx.clip();
+    const radial = (cx: number, cy: number, r: number, stops: [number, string][]) => {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, r));
+      for (const [p, c] of stops) g.addColorStop(p, c);
+      return g;
+    };
+    switch (fx.style) {
+      case 'plain':
+        ctx.fillStyle = hexA(tp.color, 0.2); ctx.fill();
+        break;
+      case 'glow': {
+        const flick = 0.85 + 0.15 * Math.sin(t * 9 + seed) * Math.sin(t * 5.3 + seed * 0.7);
+        ctx.fillStyle = radial(mid.x, mid.y, reach * 1.15, [[0, hexA(fx.core, 0.75 * flick)], [0.45, hexA(fx.mid, 0.5 * flick)], [1, hexA(fx.edge, 0.32)]]);
+        ctx.fill();
+        // Licks of flame drifting across it.
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 9; i++) {
+          const ang = rnd(i, 1) * Math.PI * 2 + t * (0.3 + rnd(i, 2) * 0.5);
+          const rr = reach * (0.2 + rnd(i, 3) * 0.7);
+          const px = mid.x + Math.cos(ang) * rr, py = mid.y + Math.sin(ang) * rr - ((t * 18 + rnd(i, 4) * 40) % 30) * (z / 40);
+          ctx.fillStyle = radial(px, py, z * (0.5 + rnd(i, 5)), [[0, hexA(fx.core, 0.35)], [1, hexA(fx.mid, 0)]]);
+          ctx.fillRect(px - z * 1.6, py - z * 1.6, z * 3.2, z * 3.2);
+        }
+        break;
+      }
+      case 'cloud': {
+        ctx.fillStyle = hexA(fx.mid, 0.3); ctx.fill();
+        for (let i = 0; i < 12; i++) {
+          const ang = rnd(i, 1) * Math.PI * 2 + Math.sin(t * 0.25 + i) * 0.4;
+          const rr = reach * rnd(i, 2) * 0.9;
+          const px = mid.x + Math.cos(ang) * rr, py = mid.y + Math.sin(ang) * rr;
+          const br = reach * (0.3 + rnd(i, 3) * 0.35) * (1 + 0.08 * Math.sin(t * 0.8 + i));
+          ctx.fillStyle = radial(px, py, br, [[0, hexA(fx.core, 0.28)], [0.6, hexA(fx.mid, 0.16)], [1, hexA(fx.mid, 0)]]);
+          ctx.fillRect(px - br, py - br, br * 2, br * 2);
+        }
+        break;
+      }
+      case 'bolt': {
+        ctx.fillStyle = radial(mid.x, mid.y, reach * 1.3, [[0, hexA(fx.mid, 0.45)], [1, hexA(fx.edge, 0.25)]]);
+        ctx.fill();
+        // Jagged bolts that re-strike several times a second.
+        const strike = Math.floor(t * 9);
+        ctx.strokeStyle = hexA(fx.core, 0.95); ctx.lineWidth = Math.max(1.5, z * 0.06);
+        ctx.shadowColor = fx.mid; ctx.shadowBlur = z * 0.4;
+        for (let b = 0; b < 3; b++) {
+          ctx.beginPath();
+          const jag = (i: number) => (cellNoise(seed + strike, b, i) - 0.5) * z * 0.8;
+          if (tp.shape === 'line' || tp.shape === 'cone') {
+            ctx.moveTo(o.x, o.y);
+            const steps = Math.max(4, Math.round(len / z) * 2);
+            for (let i = 1; i <= steps; i++) {
+              const p = i / steps, w = jag(i) * (tp.shape === 'cone' ? 1 + p * 3 : 1);
+              ctx.lineTo(o.x + dx * len * p - dy * w, o.y + dy * len * p + dx * w);
+            }
+          } else {
+            const ang = cellNoise(seed + strike, b, 99) * Math.PI * 2;
+            ctx.moveTo(mid.x, mid.y);
+            for (let i = 1; i <= 6; i++) {
+              const p = i / 6, w = jag(i);
+              ctx.lineTo(mid.x + Math.cos(ang) * reach * p - Math.sin(ang) * w, mid.y + Math.sin(ang) * reach * p + Math.cos(ang) * w);
+            }
+          }
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        break;
+      }
+      case 'rings': {
+        ctx.fillStyle = radial(mid.x, mid.y, reach * 1.2, [[0, hexA(fx.core, 0.3)], [1, hexA(fx.edge, 0.3)]]);
+        ctx.fill();
+        ctx.lineWidth = Math.max(2, z * 0.08);
+        for (let i = 0; i < 3; i++) {
+          const p = (t * 0.55 + i / 3) % 1;
+          ctx.strokeStyle = hexA(fx.core, 0.7 * (1 - p));
+          ctx.beginPath(); ctx.arc(o.x, o.y, Math.max(1, p * (tp.shape === 'square' ? len * 0.72 : len)), 0, Math.PI * 2); ctx.stroke();
+        }
+        break;
+      }
+      case 'rays': {
+        ctx.fillStyle = radial(mid.x, mid.y, reach * 1.2, [[0, hexA(fx.core, 0.55)], [0.5, hexA(fx.mid, 0.35)], [1, hexA(fx.edge, 0.22)]]);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 10; i++) {
+          const ang = (i / 10) * Math.PI * 2 + t * 0.25;
+          const g = ctx.createLinearGradient(mid.x, mid.y, mid.x + Math.cos(ang) * reach * 1.3, mid.y + Math.sin(ang) * reach * 1.3);
+          g.addColorStop(0, hexA(fx.core, 0.28)); g.addColorStop(1, hexA(fx.core, 0));
+          ctx.strokeStyle = g; ctx.lineWidth = z * 0.35;
+          ctx.beginPath(); ctx.moveTo(mid.x, mid.y); ctx.lineTo(mid.x + Math.cos(ang) * reach * 1.3, mid.y + Math.sin(ang) * reach * 1.3); ctx.stroke();
+        }
+        break;
+      }
+      case 'sparkle': {
+        ctx.fillStyle = radial(mid.x, mid.y, reach * 1.2, [[0, hexA(fx.core, 0.5)], [0.6, hexA(fx.mid, 0.35)], [1, hexA(fx.edge, 0.3)]]);
+        ctx.fill();
+        for (let i = 0; i < 26; i++) {
+          const ang = rnd(i, 1) * Math.PI * 2, rr = reach * Math.sqrt(rnd(i, 2)) * 1.1;
+          const px = mid.x + Math.cos(ang) * rr, py = mid.y + Math.sin(ang) * rr;
+          const tw = Math.max(0, Math.sin(t * (1.5 + rnd(i, 3) * 2) + i * 2));
+          const sz = z * 0.12 * (0.5 + tw);
+          ctx.strokeStyle = hexA('#ffffff', 0.9 * tw); ctx.lineWidth = Math.max(1, z * 0.025);
+          ctx.beginPath(); ctx.moveTo(px - sz, py); ctx.lineTo(px + sz, py); ctx.moveTo(px, py - sz); ctx.lineTo(px, py + sz); ctx.stroke();
+        }
+        break;
+      }
+      case 'dark': {
+        // Magical darkness: players can't see through it, so it is nearly opaque for them.
+        ctx.fillStyle = radial(mid.x, mid.y, reach * 1.1, [[0, `rgba(0,0,0,${this.dm ? 0.7 : 0.94})`], [0.85, `rgba(0,0,0,${this.dm ? 0.62 : 0.9})`], [1, 'rgba(30,10,50,0.7)']]);
+        ctx.fill();
+        break;
+      }
     }
-    ctx.stroke();
-    ctx.setLineDash([]);
-    const label = `${tp.sizeFt} ft${tp.label ? ` · ${tp.label}` : ''}`;
+    ctx.restore();
+
+    // Outline with a soft glow, then a name tag.
+    ctx.strokeStyle = plain ? tp.color : fx.style === 'dark' ? '#6b21a8' : fx.mid;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 8;
+    if (draft || tp.hidden) ctx.setLineDash([6, 4]);
+    path(); ctx.stroke();
+    ctx.setLineDash([]); ctx.shadowBlur = 0;
+    if (tp.shape === 'cone' || tp.shape === 'line') {
+      // Mark the caster's end.
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(o.x, o.y, Math.max(3, z * 0.08), 0, Math.PI * 2); ctx.fill();
+    }
+    const text = `${tp.label ? `${tp.label} · ` : ''}${tp.sizeFt} ft`;
     ctx.font = '600 12px Inter, system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.strokeText(label, o.x, o.y - 12);
-    ctx.fillStyle = '#fff'; ctx.fillText(label, o.x, o.y - 12);
+    const tw = ctx.measureText(text).width;
+    const lx = mid.x, ly = (tp.shape === 'circle' ? o.y - len : tp.shape === 'square' ? o.y - len / 2 : mid.y) - 14;
+    ctx.fillStyle = 'rgba(10,10,14,0.82)';
+    roundRect(ctx, lx - tw / 2 - 7, ly - 10, tw + 14, 20, 10); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, lx, ly + 0.5);
     ctx.restore();
   }
+
 
   private drawToken(tk: RenderToken, x: number, y: number, ox: number, oy: number, z: number, t: number) {
     const ctx = this.ctx;
@@ -852,4 +991,10 @@ function workerSupported(): boolean {
       && !/[?&]noworker\b/.test(location.search);
   } catch { supported = false; }
   return supported;
+}
+
+function hashId(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0) % 100000;
 }

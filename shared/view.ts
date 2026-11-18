@@ -89,14 +89,18 @@ export function playerMap(map: MapData): PlayerMap {
   const init = map.initiative;
   let initiative: PlayerInitiative | null = null;
   if (init.visible) {
-    const entries = init.entries.filter((e) => shownIds.has(e.tokenId));
-    const active = init.entries[init.turn]?.tokenId;
+    // Tokens players can see, plus entries the DM typed in and didn't hide.
+    const custom = (e: (typeof init.entries)[number]) => !!e.name && !map.tokens.some((t) => t.id === e.tokenId);
+    const shown = (e: (typeof init.entries)[number]) => (custom(e) ? !e.hidden : shownIds.has(e.tokenId));
+    const entries = init.entries.filter(shown);
+    const activeEntry = init.entries[init.turn];
     initiative = {
       entries: entries.map((e) => {
+        if (custom(e)) return { tokenId: e.tokenId, name: e.name!, label: e.name!.slice(0, 1).toUpperCase(), color: e.color ?? '#71717a' };
         const t = tokens.find((x) => x.id === e.tokenId)!;
         return { tokenId: t.id, name: t.name, label: t.label, color: t.color, ...(t.image ? { image: t.image } : {}) };
       }),
-      activeTokenId: active && shownIds.has(active) ? active : null,
+      activeTokenId: activeEntry && shown(activeEntry) ? activeEntry.tokenId : null,
       round: init.round,
     };
   }

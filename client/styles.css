@@ -309,3 +309,6 @@ textarea.input { height: auto; min-height: 76px; padding: 8px 10px; resize: vert
 
 /* Press-and-hold pings: no text selection or iOS callout on the map. */
 .map-canvas, .stage { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+.init-move { display: inline-flex; flex-direction: column; gap: 0; }
+.init-move .btn { height: 14px; min-height: 0; padding: 0 4px; font-size: 9px; line-height: 1; }

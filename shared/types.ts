@@ -40,6 +40,9 @@ export type Condition = (typeof CONDITIONS)[number];
 
 export const TEMPLATE_SHAPES = ['circle', 'cone', 'line', 'square'] as const;
 export type TemplateShape = (typeof TEMPLATE_SHAPES)[number];
+/** How a spell area looks. 'plain' uses the area's own colour. */
+export const TEMPLATE_EFFECTS = ['plain', 'fire', 'cold', 'lightning', 'acid', 'poison', 'necrotic', 'radiant', 'thunder', 'force', 'darkness', 'fog'] as const;
+export type TemplateEffect = (typeof TEMPLATE_EFFECTS)[number];
 
 export interface Point { x: number; y: number }
 
@@ -93,13 +96,18 @@ export interface AreaTemplate {
   color: string;
   hidden: boolean;
   label?: string;
+  effect?: TemplateEffect;
 }
 
 export interface Drawing { id: string; points: [number, number][]; color: string; width: number; hidden: boolean }
 
 export interface Label { id: string; x: number; y: number; text: string; color: string; size: number; hidden: boolean }
 
-export interface InitiativeEntry { tokenId: string; init: number }
+/**
+ * One place in the turn order. Usually a token; an entry with a `name` is one
+ * the DM typed in (lair actions, a character without a token...).
+ */
+export interface InitiativeEntry { tokenId: string; init: number; name?: string; color?: string; hidden?: boolean }
 
 export interface Initiative {
   entries: InitiativeEntry[];

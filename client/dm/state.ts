@@ -4,7 +4,7 @@ import { applyOp, findMap, type Coll, type Op } from '../../shared/ops';
 import type { AiRequest, ServerMsg, Watcher } from '../../shared/protocol';
 import {
   defaultScreen, uid,
-  type DoorState, type Game, type MapData, type ObjectKind, type TemplateShape, type Terrain, type Theme,
+  type DoorState, type Game, type MapData, type ObjectKind, type TemplateEffect, type TemplateShape, type Terrain, type Theme,
 } from '../../shared/types';
 import { loadBackup, pref, rememberGame, saveBackup, secretFor } from '../local';
 import { Connection, type Status } from '../net';
@@ -26,6 +26,8 @@ export interface ToolOpts {
   tplShape: TemplateShape;
   tplSize: number;
   tplColor: string;
+  tplLabel: string;
+  tplEffect: TemplateEffect;
   drawColor: string;
   drawWidth: number;
   drawHidden: boolean;
@@ -67,7 +69,7 @@ export interface DmState {
 const DEFAULT_OPTS: ToolOpts = {
   terrain: 'floor', brush: 1, autoWalls: true, fogMode: 'reveal', fogShape: 'room',
   doorState: 'closed', objectKind: 'chest', objectHidden: false,
-  tplShape: 'circle', tplSize: 20, tplColor: '#f97316',
+  tplShape: 'circle', tplSize: 20, tplColor: '#f97316', tplLabel: '', tplEffect: 'plain',
   drawColor: '#facc15', drawWidth: 2, drawHidden: false, labelColor: '#f4ead5', labelHidden: false,
 };
 

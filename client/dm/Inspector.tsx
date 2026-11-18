@@ -1,6 +1,9 @@
 import { useState } from 'preact/hooks';
 import { findMap } from '../../shared/ops';
-import { CONDITIONS, HP_VISIBILITY, TOKEN_KINDS, uid, type HpVisibility, type Token } from '../../shared/types';
+import { CONDITIONS, HP_VISIBILITY, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, TOKEN_KINDS, uid, type AreaTemplate, type HpVisibility, type Token } from '../../shared/types';
+import { footprint } from '../../shared/grid';
+import { templateCells } from '../../shared/templates';
+import { EFFECTS } from '../render/spells';
 import { hpLabel } from '../../shared/view';
 import { conditionColor } from '../render/mapView';
 import { Avatar, Icon, NumField, Seg, Switch, confirmDialog, toast, useStore } from '../ui';
@@ -184,14 +187,39 @@ function OtherCard({ ctl }: { ctl: DmCtl }) {
       <div class="head"><b class="grow">{name}</b><button class="btn ghost sm icon" onClick={() => ctl.set({ other: null })} aria-label="Close"><Icon name="x" size={15} /></button></div>
       <div class="section">
         {other.coll === 'templates' && (() => {
-          const t = item as unknown as { sizeFt: number; label?: string };
+          const t = item as unknown as AreaTemplate;
+          const cells = new Set(templateCells(t, map));
+          const caught = map.tokens.filter((tk) => footprint(map, tk.x, tk.y, tk.size).some((c) => cells.has(c)));
+          const aimed = t.shape === 'cone' || t.shape === 'line';
           return (
-            <div class="row">
-              <span class="small muted">Size</span>
-              <NumField class="init-num" value={t.sizeFt} onCommit={(v) => put({ sizeFt: Math.max(5, Math.min(200, Math.round((v ?? 5) / 5) * 5)) })} />
-              <span class="small muted">ft</span>
-              <input class="input sm grow" placeholder="Label (e.g. Fireball)" value={t.label ?? ''} maxLength={24} onChange={(e) => put({ label: e.currentTarget.value })} />
-            </div>
+            <>
+              <input class="input sm" placeholder="Name (e.g. Fireball)" value={t.label ?? ''} maxLength={24} onChange={(e) => put({ label: e.currentTarget.value })} />
+              <Seg value={t.shape} onChange={(v) => put({ shape: v })} options={TEMPLATE_SHAPES.map((s) => ({ v: s, label: s[0].toUpperCase() + s.slice(1) }))} />
+              <div class="row">
+                <span class="small muted">Size</span>
+                <NumField class="init-num" value={t.sizeFt} onCommit={(v) => put({ sizeFt: Math.max(5, Math.min(300, Math.round((v ?? 5) / 5) * 5)) })} />
+                <span class="small muted">ft</span>
+                {aimed && (
+                  <>
+                    <button class="btn sm icon" title="Turn left 15°" onClick={() => put({ angle: (t.angle - 15 + 360) % 360 })}>↺</button>
+                    <button class="btn sm icon" title="Turn right 15°" onClick={() => put({ angle: (t.angle + 15) % 360 })}>↻</button>
+                  </>
+                )}
+              </div>
+              <div class="row">
+                <span class="small muted">Look</span>
+                <select class="input sm grow" value={t.effect ?? 'plain'} onChange={(e) => { const fx = e.currentTarget.value as AreaTemplate['effect'] & string; put({ effect: fx, ...(fx !== 'plain' ? { color: EFFECTS[fx].swatch } : {}) }); }}>
+                  {TEMPLATE_EFFECTS.map((fx) => <option key={fx} value={fx}>{EFFECTS[fx].label}</option>)}
+                </select>
+              </div>
+              <div class="small">
+                <span class="muted">Caught ({caught.length}): </span>
+                {caught.length ? caught.map((tk) => tk.name).join(', ') : <span class="faint">nobody</span>}
+              </div>
+              {caught.length > 0 && (
+                <button class="btn sm" onClick={() => ctl.set({ other: null, selected: caught.map((tk) => tk.id) })}>Select them</button>
+              )}
+            </>
           );
         })()}
         {other.coll === 'labels' && (

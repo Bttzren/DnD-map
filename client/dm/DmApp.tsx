@@ -1,13 +1,14 @@
 import { Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { OBJECT_KINDS, TEMPLATE_SHAPES, TERRAINS, type Terrain } from '../../shared/types';
+import { OBJECT_KINDS, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, TERRAINS, type Terrain } from '../../shared/types';
+import { EFFECTS, SPELLS, spellByName } from '../render/spells';
 import { secretFor } from '../local';
 import { navigate } from '../nav';
 import { fromDmMap } from '../render/adapt';
 import { dmImages } from '../images';
 import { MapView } from '../render/mapView';
 import { PALETTES, TERRAIN_LABEL, swatch } from '../render/palette';
-import { Icon, Logo, Modal, QR, Seg, Switch, copy, useStore } from '../ui';
+import { Icon, Logo, Modal, NumField, QR, Seg, Switch, confirmDialog, copy, useStore } from '../ui';
 import { Inspector } from './Inspector';
 import { GeneratePanel } from './panels/GeneratePanel';
 import { InitiativePanel, advance } from './panels/InitiativePanel';
@@ -312,17 +313,40 @@ function ToolBar({ ctl }: { ctl: DmCtl }) {
     case 'ruler':
       body = <span class="small muted">Drag to measure. Start on a token to measure from it.</span>;
       break;
-    case 'template':
+    case 'template': {
+      const count = ctl.map?.templates.length ?? 0;
       body = (
         <>
-          <Seg value={o.tplShape} onChange={(t) => ctl.setOpts({ tplShape: t })} options={TEMPLATE_SHAPES.map((t) => ({ v: t, label: t[0].toUpperCase() + t.slice(1) }))} />
-          <Seg value={o.tplSize} onChange={(v) => ctl.setOpts({ tplSize: v })} options={[10, 15, 20, 30, 60].map((v) => ({ v, label: `${v}` }))} />
+          <select class="input sm" style={{ width: 'auto' }} value={spellByName(o.tplLabel) ? o.tplLabel : ''} aria-label="Spell"
+            onChange={(e) => {
+              const sp = spellByName(e.currentTarget.value);
+              if (sp) ctl.setOpts({ tplShape: sp.shape, tplSize: sp.sizeFt, tplEffect: sp.effect, tplLabel: sp.name, tplColor: EFFECTS[sp.effect].swatch });
+              else ctl.setOpts({ tplLabel: '', tplEffect: 'plain' });
+            }}>
+            <option value="">Any area…</option>
+            {SPELLS.map((s) => <option key={s.name} value={s.name}>{s.name} · {s.sizeFt} ft {s.shape}</option>)}
+          </select>
+          <Seg value={o.tplShape} onChange={(t) => ctl.setOpts({ tplShape: t, tplLabel: spellByName(o.tplLabel) ? '' : o.tplLabel })} options={TEMPLATE_SHAPES.map((t) => ({ v: t, label: t[0].toUpperCase() + t.slice(1) }))} />
+          <NumField class="init-num" value={o.tplSize} title="Size in feet (radius for circles, length for cones and lines, side for squares)"
+            onCommit={(v) => ctl.setOpts({ tplSize: Math.max(5, Math.min(300, Math.round((v ?? 5) / 5) * 5)) })} />
           <span class="small muted">ft</span>
-          <div class="swatches">{COLORS.map((c) => <button key={c} class={`sw${o.tplColor === c ? ' on' : ''}`} style={{ background: c }} onClick={() => ctl.setOpts({ tplColor: c })} aria-label={c} />)}</div>
-          <span class="small faint">Drag to aim cones and lines, or size circles</span>
+          <select class="input sm" style={{ width: 'auto' }} value={o.tplEffect} aria-label="Look" onChange={(e) => { const fx = e.currentTarget.value as typeof o.tplEffect; ctl.setOpts({ tplEffect: fx, ...(fx !== 'plain' ? { tplColor: EFFECTS[fx].swatch } : {}) }); }}>
+            {TEMPLATE_EFFECTS.map((fx) => <option key={fx} value={fx}>{EFFECTS[fx].label}</option>)}
+          </select>
+          {o.tplEffect === 'plain' && <div class="swatches">{COLORS.map((c) => <button key={c} class={`sw${o.tplColor === c ? ' on' : ''}`} style={{ background: c }} onClick={() => ctl.setOpts({ tplColor: c })} aria-label={c} />)}</div>}
+          {count > 0 && (
+            <button class="btn ghost sm" onClick={async () => {
+              const map = ctl.map;
+              if (!map || !(await confirmDialog(`Clear all ${count} spell areas?`, 'You can undo this with Ctrl+Z.', 'Clear'))) return;
+              ctl.begin(); map.templates.forEach((t) => ctl.dispatch({ t: 'item.delete', mapId: map.id, coll: 'templates', id: t.id })); ctl.end();
+              ctl.set({ other: null });
+            }}><Icon name="trash" size={14} /> Clear all</button>
+          )}
+          <span class="small faint">Click to place, drag to aim or size · drag a placed area's centre to move it</span>
         </>
       );
       break;
+    }
     case 'draw':
       body = (
         <>

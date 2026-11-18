@@ -259,3 +259,37 @@ describe('sanitising ops from the wire', () => {
     expect(m.settings.distanceRule).toBe('5e');
   });
 });
+
+describe('turn order entries typed in by the DM', () => {
+  it('shows typed-in entries to players unless hidden, and tracks whose turn it is', () => {
+    const g = game(); const m = g.maps[0];
+    for (let i = 0; i < m.fog.length; i++) m.fog[i] = 1;
+    const hero = makeToken({ name: 'Thalia', kind: 'player', x: 2, y: 2 });
+    const spy = makeToken({ name: 'Spy', x: 3, y: 3, hidden: true });
+    m.tokens.push(hero, spy);
+    applyOp(g, { t: 'map.patch', mapId: m.id, patch: { initiative: {
+      entries: [
+        { tokenId: 'ent_lair', init: 20, name: 'Lair actions', color: '#a855f7' },
+        { tokenId: hero.id, init: 18 },
+        { tokenId: spy.id, init: 15 },
+        { tokenId: 'ent_secret', init: 10, name: 'SECRET-REINFORCEMENTS', hidden: true },
+      ], turn: 0, round: 1, visible: true,
+    } } });
+    const init = playerView(g).map!.initiative!;
+    expect(init.entries.map((e) => e.name)).toEqual(['Lair actions', 'Thalia']);
+    expect(init.entries[0]).toMatchObject({ label: 'L', color: '#a855f7' });
+    expect(init.activeTokenId).toBe('ent_lair');
+    expect(JSON.stringify(playerView(g))).not.toContain('SECRET-REINFORCEMENTS');
+    // A hidden entry's turn shows as nobody's.
+    applyOp(g, { t: 'map.patch', mapId: m.id, patch: { initiative: { ...m.initiative, turn: 3 } } });
+    expect(playerView(g).map!.initiative!.activeTokenId).toBeNull();
+  });
+
+  it('keeps spell area looks through the sanitizer', () => {
+    const g = game(); const m = g.maps[0];
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'templates', item: { id: 'tp1', shape: 'cone', x: 2, y: 2, sizeFt: 60, angle: 0, color: '#38bdf8', hidden: false, label: 'Cone of Cold', effect: 'cold' } });
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'templates', item: { id: 'tp2', shape: 'circle', x: 2, y: 2, sizeFt: 20, angle: 0, color: '#38bdf8', hidden: false, effect: 'banana' as never } });
+    expect(m.templates[0].effect).toBe('cold');
+    expect(m.templates[1].effect).toBeUndefined();
+  });
+});
