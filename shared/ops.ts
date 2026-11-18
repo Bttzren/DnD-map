@@ -2,7 +2,7 @@
 // sends them; the server applies the same ops with the same reducer.
 import { sanitizeInitiative, sanitizeItem, sanitizeMap, sanitizeScreen, sanitizeSettings } from './sanitize';
 import {
-  MAP_MAX, MAP_MIN, THEMES, TERRAINS,
+  MAP_MAX, MAP_MIN, MAX_IMAGES, THEMES, TERRAINS, isImageData, isImageId,
   type AreaTemplate, type Door, type Drawing, type Game, type Label, type MapData,
   type MapObject, type Room, type ScreenState, type Terrain, type Token,
 } from './types';
@@ -30,7 +30,8 @@ export type Op =
   | { t: 'fog.all'; mapId: string; revealed: boolean }
   | { [K in Coll]: { t: 'item.put'; mapId: string; coll: K; item: CollTypes[K] } }[Coll]
   | { t: 'item.delete'; mapId: string; coll: Coll; id: string }
-  | { t: 'game.patch'; liveMapId?: string | null; screen?: Partial<ScreenState> };
+  | { t: 'game.patch'; liveMapId?: string | null; screen?: Partial<ScreenState> }
+  | { t: 'image.put'; id: string; data: string };
 
 const TERRAIN_SET: ReadonlySet<string> = new Set(TERRAINS);
 const MAX_ITEMS = 2000;
@@ -75,6 +76,13 @@ export function applyOp(game: Game, op: Op): Game {
       if (op.screen) game.screen = sanitizeScreen(op.screen, game.screen);
       break;
     }
+    case 'image.put': {
+      if (!isImageId(op.id) || !isImageData(op.data)) break;
+      const images = (game.images ??= {});
+      if (!(op.id in images) && Object.keys(images).length >= MAX_IMAGES) pruneImages(game);
+      if (op.id in images || Object.keys(images).length < MAX_IMAGES) images[op.id] = op.data;
+      break;
+    }
     default: {
       const map = findMap(game, op.mapId);
       if (!map) break;
@@ -85,7 +93,15 @@ export function applyOp(game: Game, op: Op): Game {
   return game;
 }
 
-function applyMapOp(map: MapData, op: Exclude<Op, { t: 'map.put' | 'map.delete' | 'game.patch' }>) {
+/** Drop pictures no token uses any more. */
+export function pruneImages(game: Game) {
+  if (!game.images) return;
+  const used = new Set<string>();
+  for (const m of game.maps) for (const t of m.tokens) if (t.image) used.add(t.image);
+  for (const k of Object.keys(game.images)) if (!used.has(k)) delete game.images[k];
+}
+
+function applyMapOp(map: MapData, op: Exclude<Op, { t: 'map.put' | 'map.delete' | 'game.patch' | 'image.put' }>) {
   const n = map.width * map.height;
   const okCell = (c: number) => Number.isInteger(c) && c >= 0 && c < n;
   switch (op.t) {

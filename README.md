@@ -89,6 +89,9 @@ change the brush, `Tab` toggles the side panel, and holding `Space` pans.
   inspector: damage and heal, conditions, AC, notes only you see, and what
   players see of its health (numbers, a bar, a word like *bloodied*, or
   nothing).
+- **Pictures:** give any token a picture from your files (in its inspector,
+  **Upload**). Added a batch of goblins? Picture one, then **Use for the other
+  goblins**.
 - **Initiative:** add the party and foes, roll for monsters, and press `N` for
   each turn. The active creature glows on every screen. Players only see
   creatures they can see.
@@ -110,8 +113,13 @@ Players get the map, full screen, and little else:
   health (shown the way you chose per token), conditions, and whether
   they're down. The chip glows on that character's turn, and tapping it
   centres the map on them.
-- Two small buttons: measure a distance, and fit the map to the screen.
-  Tapping a token shows its name and health.
+- Three small buttons: measure a distance, fit the map to the screen, and
+  📷 set your character's picture (take a photo, or pick one from the camera
+  roll or files). Tapping a token shows its name and health.
+
+Players can only change pictures on party tokens they can see, never on
+monsters. Pictures are shrunk to a small square on the device before they're
+sent, and saved with the game.
 
 ## What players can't see
 

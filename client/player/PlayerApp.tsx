@@ -7,7 +7,8 @@ import { Connection, type Status } from '../net';
 import { fromPlayerView } from '../render/adapt';
 import { MapView, conditionColor } from '../render/mapView';
 import type { Ping, RenderToken } from '../render/types';
-import { Icon, Logo } from '../ui';
+import { Avatar, Icon, Logo, Modal, toast } from '../ui';
+import { fileToIcon, pickImage, playerImages, type ImageResolver } from '../images';
 import { navigate } from '../nav';
 
 export function PlayerApp(p: { code: string }) {
@@ -48,6 +49,9 @@ function PlayerView(p: { code: string; name: string }) {
   const rulerRef = useRef(ruler); rulerRef.current = ruler;
   const pings = useRef<Ping[]>([]);
   const screenRef = useRef(screen); screenRef.current = screen;
+  const connRef = useRef<Connection | null>(null);
+  const [picSheet, setPicSheet] = useState(false);
+  const img = playerImages(p.code);
 
   useEffect(() => {
     const view = new MapView(hostRef.current!);
@@ -56,6 +60,7 @@ function PlayerView(p: { code: string; name: string }) {
     const conn = new Connection(
       () => ({ type: 'join', code: p.code, role: 'player', name: p.name }),
       (m: ServerMsg) => {
+        if (m.type === 'error' && m.code === 'not-allowed' && m.message) toast(m.message, 'error');
         if (m.type === 'error' && m.code === 'no-room') { setWaiting(true); setTimeout(() => conn.reconnect(), 4000); }
         if (m.type === 'pview') {
           setWaiting(false);
@@ -74,6 +79,7 @@ function PlayerView(p: { code: string; name: string }) {
       },
       setStatus,
     );
+    connRef.current = conn;
     return () => { conn.close(); view.destroy(); };
   }, [p.code]);
 
@@ -81,7 +87,7 @@ function PlayerView(p: { code: string; name: string }) {
   useEffect(() => {
     const view = viewRef.current!;
     if (!stat || !dyn || screen.blank) { view.setMap(null, '', ''); return; }
-    view.setMap(fromPlayerView(stat, dyn), `${stat.id}:${staticVer}`, '');
+    view.setMap(fromPlayerView(stat, dyn, playerImages(p.code)), `${stat.id}:${staticVer}`, '');
   }, [stat, dyn, staticVer, screen.blank]);
 
   // Keep the map clear of the turn order above and the party chips below.
@@ -155,7 +161,7 @@ function PlayerView(p: { code: string; name: string }) {
             <span class="scale" title="Each grid square is 5 feet"><i /> 5 ft</span>
             {screen.followDm && <span class="faint small">· following DM</span>}
           </div>
-          {fighting && <TurnOrder init={init!} tokens={dyn!.tokens} onPick={focus} />}
+          {fighting && <TurnOrder init={init!} tokens={dyn!.tokens} img={img} onPick={focus} />}
           {screen.banner && <div class="banner">{screen.banner}</div>}
         </div>
       )}
@@ -175,13 +181,19 @@ function PlayerView(p: { code: string; name: string }) {
             {ruler && <span class="pl-hint">Drag on the map to measure</span>}
             <button class={`round-btn${ruler ? ' on' : ''}`} onClick={() => setRuler(!ruler)} aria-pressed={ruler} aria-label="Measure distance" title="Measure distance"><Icon name="ruler" /></button>
             <button class="round-btn" onClick={() => viewRef.current?.fit()} aria-label="Fit map to screen" title="Fit map to screen"><Icon name="fit" /></button>
+            {party.length > 0 && <button class="round-btn" onClick={() => setPicSheet(true)} aria-label="Set your character’s picture" title="Set your character’s picture"><Icon name="camera" /></button>}
           </div>
           {party.length > 0 && (
             <div class="party" aria-label="Party">
-              {party.map((t) => <PartyChip key={t.id} t={t} active={init?.activeTokenId === t.id} onClick={() => focus(t)} />)}
+              {party.map((t) => <PartyChip key={t.id} t={t} img={img} active={init?.activeTokenId === t.id} onClick={() => focus(t)} />)}
             </div>
           )}
         </div>
+      )}
+
+      {picSheet && (
+        <PictureSheet code={p.code} party={party} img={img} onClose={() => setPicSheet(false)}
+          onSet={(tokenId, pic) => connRef.current?.send(pic ? { type: 'icon', tokenId, id: pic.id, data: pic.data } : { type: 'icon', tokenId, id: null }, false)} />
       )}
 
       {screen.blank && (
@@ -214,11 +226,11 @@ function hpOf(t: PToken): { ratio: number | null; text: string | null } {
 
 const hpColor = (r: number) => (r > 0.5 ? '#22c55e' : r > 0.25 ? '#f59e0b' : '#ef4444');
 
-function PartyChip({ t, active, onClick }: { t: PToken; active: boolean; onClick: () => void }) {
+function PartyChip({ t, img, active, onClick }: { t: PToken; img: ImageResolver; active: boolean; onClick: () => void }) {
   const hp = hpOf(t);
   return (
     <button class={`pchip${active ? ' active' : ''}${t.down ? ' down' : ''}`} onClick={onClick} title={`Show ${t.name} on the map`}>
-      <span class="avatar" style={{ background: t.color }}>{t.label}</span>
+      <Avatar label={t.label} color={t.color} image={img(t.image)} />
       <span class="pchip-body">
         <span class="pchip-name">{t.name}{t.down && <span class="pchip-down"> · down</span>}</span>
         {hp.ratio !== null && <span class="pchip-bar"><span style={{ width: `${Math.max(0, Math.min(1, hp.ratio)) * 100}%`, background: hpColor(hp.ratio) }} /></span>}
@@ -232,7 +244,7 @@ function PartyChip({ t, active, onClick }: { t: PToken; active: boolean; onClick
   );
 }
 
-function TurnOrder({ init, tokens, onPick }: { init: NonNullable<PlayerDynamic['initiative']>; tokens: PToken[]; onPick: (t: PToken) => void }) {
+function TurnOrder({ init, tokens, img, onPick }: { init: NonNullable<PlayerDynamic['initiative']>; tokens: PToken[]; img: ImageResolver; onPick: (t: PToken) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector('.turn.active')?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
@@ -246,11 +258,55 @@ function TurnOrder({ init, tokens, onPick }: { init: NonNullable<PlayerDynamic['
         return (
           <button key={e.tokenId} class={`turn${active ? ' active' : ''}${t?.kind === 'enemy' ? ' foe' : t?.kind === 'player' ? ' pc' : ''}${t?.down ? ' down' : ''}`}
             onClick={() => t && onPick(t)} aria-current={active ? 'true' : undefined}>
-            <span class="avatar" style={{ background: e.color }}>{e.label}</span>
+            <Avatar label={e.label} color={e.color} image={img(e.image)} />
             <span class="turn-name">{e.name}</span>
           </button>
         );
       })}
     </div>
+  );
+}
+
+/** Pick your character, then a photo from the camera roll, the camera or your files. */
+function PictureSheet(p: { code: string; party: PToken[]; img: ImageResolver; onClose: () => void; onSet: (tokenId: string, pic: { id: string; data: string } | null) => void }) {
+  const key = `me:${p.code}`;
+  const [me, setMe] = useState<string | null>(() => pref.get<string | null>(key, null));
+  const [busy, setBusy] = useState(false);
+  const choose = async (t: PToken) => {
+    setMe(t.id); pref.set(key, t.id);
+    const file = await pickImage();
+    if (!file) return;
+    setBusy(true);
+    try {
+      const pic = await fileToIcon(file);
+      p.onSet(t.id, pic);
+      toast(`Picture set for ${t.name}`, 'ok');
+      p.onClose();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally { setBusy(false); }
+  };
+  const mine = p.party.find((t) => t.id === me);
+  return (
+    <Modal title="Your character’s picture" onClose={p.onClose}>
+      <div class="stack">
+        <p class="muted" style={{ margin: 0 }}>Tap your character, then choose a photo. On a phone you can take one or pick from your camera roll.</p>
+        <div class="pic-pick">
+          {p.party.map((t) => (
+            <button key={t.id} class={`pic-opt${t.id === me ? ' on' : ''}`} disabled={busy} onClick={() => void choose(t)}>
+              <Avatar label={t.label} color={t.color} image={p.img(t.image)} />
+              <span>{t.name}</span>
+              <Icon name="camera" size={16} />
+            </button>
+          ))}
+        </div>
+        {busy && <span class="hint">Preparing picture…</span>}
+        {mine?.image && (
+          <button class="btn ghost" disabled={busy} onClick={() => { p.onSet(mine.id, null); toast(`Picture removed from ${mine.name}`); p.onClose(); }}>
+            <Icon name="trash" size={15} /> Remove {mine.name}’s picture
+          </button>
+        )}
+      </div>
+    </Modal>
   );
 }

@@ -189,7 +189,17 @@ const PATHS: Record<string, string> = {
   wand: 'M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5',
   settings: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z',
   layers: 'M12 2l10 6-10 6L2 8zM2 16l10 6 10-6M2 12l10 6 10-6',
+  camera: 'M3 8h3.5L8 5.5h8L17.5 8H21v11H3zM12 17a3.5 3.5 0 100-7 3.5 3.5 0 000 7z',
 };
+
+/** A token's face: its picture if it has one, else its emoji or initials on its colour. */
+export function Avatar(p: { label: string; color: string; image?: string | null; class?: string }) {
+  return (
+    <span class={`avatar${p.image ? ' has-pic' : ''}${p.class ? ` ${p.class}` : ''}`} style={{ background: p.color }}>
+      {p.image ? <img src={p.image} alt="" loading="lazy" decoding="async" draggable={false} /> : p.label}
+    </span>
+  );
+}
 
 export function Icon(p: { name: keyof typeof PATHS | string; size?: number; style?: CSSProperties }) {
   return (

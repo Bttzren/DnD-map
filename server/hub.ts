@@ -3,11 +3,11 @@
 import { randomBytes } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import { buildMapFromPlan } from '../shared/build';
-import { applyOp, validateMap } from '../shared/ops';
-import { sanitizeMap, sanitizeScreen } from '../shared/sanitize';
+import { applyOp, findMap, validateMap, type Op } from '../shared/ops';
+import { sanitizeImages, sanitizeMap, sanitizeScreen } from '../shared/sanitize';
 import { STATIC_KEYS, type AiRequest, type ClientMsg, type PlayerDynamic, type PlayerStatic, type Role, type ServerMsg, type Watcher } from '../shared/protocol';
-import { MAP_MAX, MAP_MIN, THEMES, defaultScreen, normalizeCode, type Game } from '../shared/types';
-import { playerView } from '../shared/view';
+import { MAP_MAX, MAP_MIN, THEMES, defaultScreen, isImageData, isImageId, normalizeCode, type Game } from '../shared/types';
+import { playerView, visibleTokens } from '../shared/view';
 import { hashSecret, sameHash, type Secrets } from './secrets';
 import type { Store } from './store';
 
@@ -26,6 +26,8 @@ interface Client {
   alive: boolean;
   /** Messages from one socket are handled strictly in order. */
   queue: Promise<void>;
+  /** When this player last changed a picture, for rate limiting. */
+  iconTimes?: number[];
 }
 
 interface Room {
@@ -158,6 +160,7 @@ export class Hub {
     if (msg.type === 'join') return this.join(c, msg);
     if (msg.type === 'restore') return this.restore(c, msg.game);
     const room = c.code ? this.rooms.get(c.code) : undefined;
+    if (msg.type === 'icon' && room && c.role === 'player' && room.players.has(c)) return this.icon(c, room, msg);
     if (!room || c.role !== 'dm' || !room.dms.has(c)) return send(c.ws, { type: 'error', code: 'not-allowed' });
 
     switch (msg.type) {
@@ -165,10 +168,7 @@ export class Hub {
         try { applyOp(room.game, msg.op); } catch (e) {
           return send(c.ws, { type: 'error', code: 'bad-op', message: (e as Error).message });
         }
-        const out = JSON.stringify({ type: 'op', op: msg.op } satisfies ServerMsg);
-        for (const d of room.dms) if (d !== c) send(d.ws, out);
-        this.persist(room);
-        this.schedule(room);
+        this.relay(room, msg.op, c);
         break;
       }
       case 'ping': {
@@ -186,6 +186,48 @@ export class Hub {
       }
       case 'ai': return this.ai(c, room, msg);
     }
+  }
+
+  /** Apply an op everywhere: other DMs get it as is, players get a fresh view. */
+  private relay(room: Room, op: Op, from: Client | null) {
+    const out = JSON.stringify({ type: 'op', op } satisfies ServerMsg);
+    for (const d of room.dms) if (d !== from) send(d.ws, out);
+    this.persist(room);
+    this.schedule(room);
+  }
+
+  /**
+   * A player sets their character's picture. They may only touch party
+   * tokens they can currently see on the live map, a few times a minute.
+   */
+  private icon(c: Client, room: Room, msg: Extract<ClientMsg, { type: 'icon' }>) {
+    const now = Date.now();
+    c.iconTimes = (c.iconTimes ?? []).filter((t) => now - t < 60_000);
+    if (c.iconTimes.length >= 6) return send(c.ws, { type: 'error', code: 'not-allowed', message: 'Too many picture changes. Try again in a minute.' });
+    const map = findMap(room.game, room.game.liveMapId);
+    const token = map && visibleTokens(map).find((t) => t.id === msg.tokenId && t.kind === 'player');
+    if (!map || !token) return send(c.ws, { type: 'error', code: 'not-allowed', message: 'You can only change a party member’s picture.' });
+    const ops: Op[] = [];
+    if (msg.id === null) {
+      const { image: _drop, ...rest } = token;
+      ops.push({ t: 'item.put', mapId: map.id, coll: 'tokens', item: rest });
+    } else {
+      if (!isImageId(msg.id)) return send(c.ws, { type: 'error', code: 'bad-message' });
+      if (!room.game.images?.[msg.id]) {
+        if (!isImageData(msg.data)) return send(c.ws, { type: 'error', code: 'bad-message', message: 'That picture could not be used.' });
+        ops.push({ t: 'image.put', id: msg.id, data: msg.data });
+      }
+      ops.push({ t: 'item.put', mapId: map.id, coll: 'tokens', item: { ...token, image: msg.id } });
+    }
+    c.iconTimes.push(now);
+    for (const op of ops) { applyOp(room.game, op); this.relay(room, op, null); }
+  }
+
+  /** A token picture, for the image endpoint. */
+  async image(code: string, id: string): Promise<string | null> {
+    if (!isImageId(id)) return null;
+    const room = await this.getRoom(normalizeCode(code));
+    return room?.game.images?.[id] ?? null;
   }
 
   private async join(c: Client, msg: Extract<ClientMsg, { type: 'join' }>) {
@@ -260,6 +302,7 @@ export class Hub {
         code, maps,
         liveMapId: maps.some((m) => m.id === game.liveMapId) ? game.liveMapId : maps[0]?.id ?? null,
         screen: sanitizeScreen(game.screen),
+        images: sanitizeImages(game.images),
         createdAt: Number(game.createdAt) || Date.now(), updatedAt: Date.now(),
       };
       const room = this.makeRoom(clean, hashSecret(c.pendingSecret));

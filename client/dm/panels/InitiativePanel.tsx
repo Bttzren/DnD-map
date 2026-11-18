@@ -1,5 +1,5 @@
 import type { Initiative, MapData } from '../../../shared/types';
-import { Icon, NumField, Switch, toast, useStore } from '../../ui';
+import { Avatar, Icon, NumField, Switch, toast, useStore } from '../../ui';
 import type { MapView } from '../../render/mapView';
 import type { DmCtl } from '../state';
 
@@ -91,7 +91,7 @@ export function InitiativePanel({ ctl, view }: { ctl: DmCtl; view: MapView | nul
                     set(sortEntries({ ...init, entries }, map));
                   }} />
                 </span>
-                <span class="avatar" style={{ background: t.color }}>{t.label}</span>
+                <Avatar label={t.label} color={t.color} image={t.image ? ctl.state.game?.images?.[t.image] : null} />
                 <span class="name">{t.name}{t.hidden && <span class="faint"> · hidden</span>}</span>
                 {t.hp !== null && <span class="small muted">{t.hp}/{t.maxHp}</span>}
                 <button class="btn ghost sm icon" title="Remove from order" onClick={(ev) => {

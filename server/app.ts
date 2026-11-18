@@ -72,6 +72,16 @@ export async function createApp(o: AppOptions) {
         await hub.createRoom(code, secret);
         return json(res, 200, { code, dmSecret: secret });
       }
+      const img = /^\/api\/img\/([A-Za-z0-9]{4,12})\/([a-z0-9]{8,40})$/.exec(url.pathname);
+      if (img && req.method === 'GET') {
+        const data = await hub.image(img[1], img[2]);
+        const m = data && /^data:(image\/(?:jpeg|png|webp));base64,(.*)$/.exec(data);
+        if (!m) return json(res, 404, { error: 'Not found' });
+        const bytes = Buffer.from(m[2], 'base64');
+        // Pictures are named by their content, so they never change.
+        res.writeHead(200, { 'content-type': m[1], 'content-length': bytes.length, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' });
+        return res.end(bytes);
+      }
       if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'Not found' });
       if (!o.staticDir) { res.writeHead(404); return res.end('Not found'); }
       await serveStatic(o.staticDir, url.pathname, res);

@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { PRESETS, type Preset } from '../../../shared/presets';
 import { makeToken, TOKEN_KINDS, type TokenKind } from '../../../shared/types';
-import { Icon, NumField, Seg, toast, useStore } from '../../ui';
+import { Avatar, Icon, NumField, Seg, toast, useStore } from '../../ui';
 import type { MapView } from '../../render/mapView';
 import type { DmCtl } from '../state';
 import { freeSpots } from '../tools';
@@ -110,7 +110,7 @@ export function TokensPanel({ ctl, view }: { ctl: DmCtl; view: MapView | null })
           {sorted.map((t) => (
             <div key={t.id} class={`item${selected.includes(t.id) ? ' on' : ''}${t.hidden ? ' dim' : ''}`}
               onClick={() => { ctl.set({ selected: [t.id], other: null, tool: 'select' }); view?.centerOn(t.x + t.size / 2, t.y + t.size / 2); }}>
-              <span class="avatar" style={{ background: t.color }}>{t.label}</span>
+              <Avatar label={t.label} color={t.color} image={t.image ? ctl.state.game?.images?.[t.image] : null} />
               <span class="name">{t.name}{t.down && <span class="faint"> · down</span>}</span>
               {t.hp !== null && t.maxHp && <span class="small muted">{t.hp}/{t.maxHp}</span>}
               <button class="btn ghost sm icon" title={t.hidden ? 'Hidden from players. Click to show' : 'Visible to players. Click to hide'}

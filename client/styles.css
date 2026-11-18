@@ -234,6 +234,8 @@ textarea.input { height: auto; min-height: 76px; padding: 8px 10px; resize: vert
 .turns::-webkit-scrollbar { display: none; }
 .turns-round { padding: 0 6px; color: var(--gold-2); font: 700 12px var(--ui); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
 .turn { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: #110f16; border: 1px solid var(--line); white-space: nowrap; font-size: 13px; flex: none; cursor: pointer; color: var(--muted); }
+.avatar.has-pic { overflow: hidden; padding: 0; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .turn .avatar { width: 24px; height: 24px; font-size: 13px; }
 .turn.pc { color: var(--text); }
 .turn.foe .avatar { box-shadow: 0 0 0 2px #7f1d1d; }
@@ -294,3 +296,13 @@ textarea.input { height: auto; min-height: 76px; padding: 8px 10px; resize: vert
   .inspector { width: min(300px, calc(100% - 24px)); }
   .topbar .hide-sm { display: none; }
 }
+
+/* Player picture picker */
+.pic-pick { display: grid; gap: 8px; }
+.pic-opt { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line, rgba(255,255,255,0.12)); background: rgba(255,255,255,0.04); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pic-opt span:nth-child(2) { flex: 1; font-weight: 600; }
+.pic-opt .avatar { width: 40px; height: 40px; font-size: 20px; }
+.pic-opt.on { border-color: #e0b84a; background: rgba(224,184,74,0.12); }
+.pic-opt:disabled { opacity: 0.6; cursor: wait; }
+.pic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pic-row .avatar { width: 48px; height: 48px; font-size: 24px; }

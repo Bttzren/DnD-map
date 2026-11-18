@@ -111,6 +111,47 @@ describe('server', () => {
     for (const r of p.raw) expect(r).not.toContain(g.dmSecret);
   });
 
+  it('lets a player set a party token picture, but not a monster one, and serves it', async () => {
+    const { port, base } = await start();
+    const { body: g } = await newGame(base);
+    const d = await dm(port, g.code, g.dmSecret);
+    await d.next('state');
+    const map = generateMap({ theme: 'dungeon', width: 30, height: 20, seed: 'pic' });
+    map.fog.fill(1);
+    const hero = makeToken({ name: 'Thalia', kind: 'player', x: map.rooms[0].x, y: map.rooms[0].y });
+    const orc = makeToken({ name: 'Orc', kind: 'enemy', x: map.rooms[0].x + 1, y: map.rooms[0].y });
+    map.tokens.push(hero, orc);
+    d.send({ type: 'op', op: { t: 'map.put', map } });
+    const p = await player(port, g.code);
+    await p.next('pview', (m) => !!m.static);
+
+    // A tiny valid JPEG-ish payload: the server only checks the data URL shape.
+    const data = 'data:image/jpeg;base64,' + Buffer.from('fake-jpeg-bytes').toString('base64');
+    p.send({ type: 'icon', tokenId: orc.id, id: 'abcdefgh1234', data });
+    expect((await p.next('error')).code).toBe('not-allowed');
+    p.send({ type: 'icon', tokenId: hero.id, id: 'not valid!', data });
+    expect((await p.next('error')).code).toBe('bad-message');
+
+    p.send({ type: 'icon', tokenId: hero.id, id: 'abcdefgh1234', data });
+    const seen = await p.next('pview', (m) => !!m.dynamic?.tokens.some((t) => t.id === hero.id && t.image === 'abcdefgh1234'));
+    expect(seen.dynamic!.tokens.find((t) => t.id === orc.id)!.image).toBeUndefined();
+    // The DM gets the picture and the token change as ordinary ops.
+    await d.next('op', (m) => m.op.t === 'image.put');
+    await d.next('op', (m) => m.op.t === 'item.put' && m.op.coll === 'tokens' && (m.op.item as { image?: string }).image === 'abcdefgh1234');
+    // Players never get the picture data over the socket, only its id.
+    for (const r of p.raw) expect(r).not.toContain('base64');
+
+    const res = await fetch(`${base}/api/img/${g.code}/abcdefgh1234`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/jpeg');
+    expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('fake-jpeg-bytes');
+    expect((await fetch(`${base}/api/img/${g.code}/zzzzzzzz9999`)).status).toBe(404);
+
+    // Clearing it.
+    p.send({ type: 'icon', tokenId: hero.id, id: null });
+    await p.next('pview', (m) => !!m.dynamic?.tokens.some((t) => t.id === hero.id && !t.image));
+  });
+
   it('rejects a wrong DM secret and player ops', async () => {
     const { port, base } = await start();
     const { body: g } = await newGame(base);

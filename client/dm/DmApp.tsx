@@ -4,6 +4,7 @@ import { OBJECT_KINDS, TEMPLATE_SHAPES, TERRAINS, type Terrain } from '../../sha
 import { secretFor } from '../local';
 import { navigate } from '../nav';
 import { fromDmMap } from '../render/adapt';
+import { dmImages } from '../images';
 import { MapView } from '../render/mapView';
 import { PALETTES, TERRAIN_LABEL, swatch } from '../render/palette';
 import { Icon, Logo, Modal, QR, Seg, Switch, copy, useStore } from '../ui';
@@ -84,7 +85,7 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
   // Feed state into the canvas.
   useEffect(() => {
     if (!view) return;
-    view.setMap(map ? fromDmMap(map) : null, `${map?.id}:${s.staticVer}`, `${map?.id}:${s.fogVer}`);
+    view.setMap(map ? fromDmMap(map, dmImages(s.game?.images)) : null, `${map?.id}:${s.staticVer}`, `${map?.id}:${s.fogVer}`);
     view.overlay = {
       ...view.overlay,
       selectedTokenId: s.selected[0] ?? null,

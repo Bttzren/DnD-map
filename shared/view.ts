@@ -13,10 +13,11 @@ export interface PlayerToken {
   hp: { cur: number; max: number } | null;
   hpBar: number | null;
   hpLabel: string | null;
+  image?: string;
 }
 
 export interface PlayerInitiative {
-  entries: { tokenId: string; name: string; label: string; color: string }[];
+  entries: { tokenId: string; name: string; label: string; color: string; image?: string }[];
   activeTokenId: string | null;
   round: number;
 }
@@ -53,6 +54,7 @@ function tokenForPlayers(t: Token): PlayerToken {
     hp: hasHp && t.hpVisibility === 'exact' ? { cur: t.hp!, max: t.maxHp! } : null,
     hpBar: hasHp && t.hpVisibility === 'bar' ? ratio : null,
     hpLabel: hasHp && t.hpVisibility === 'vague' ? hpLabel(ratio) : null,
+    ...(t.image ? { image: t.image } : {}),
   };
 }
 
@@ -92,7 +94,7 @@ export function playerMap(map: MapData): PlayerMap {
     initiative = {
       entries: entries.map((e) => {
         const t = tokens.find((x) => x.id === e.tokenId)!;
-        return { tokenId: t.id, name: t.name, label: t.label, color: t.color };
+        return { tokenId: t.id, name: t.name, label: t.label, color: t.color, ...(t.image ? { image: t.image } : {}) };
       }),
       activeTokenId: active && shownIds.has(active) ? active : null,
       round: init.round,

@@ -576,13 +576,23 @@ export class MapView {
     ctx.strokeStyle = tk.kind === 'enemy' ? '#7f1d1d' : tk.kind === 'player' ? '#dbeafe' : tk.kind === 'ally' ? '#14532d' : '#713f12';
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
 
-    // Face: emoji or initials.
-    const emoji = /\p{Extended_Pictographic}/u.test(tk.label);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = emoji ? `${r * 1.15}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif` : `700 ${r * (tk.label.length > 2 ? 0.7 : 0.9)}px Inter, system-ui, sans-serif`;
-    ctx.fillStyle = '#fff';
-    if (!emoji) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.strokeText(tk.label, cx, cy + r * 0.04); }
-    ctx.fillText(tk.label, cx, cy + r * (emoji ? 0.08 : 0.04));
+    // Face: a picture, or else emoji or initials.
+    const pic = tk.image ? tokenImage(tk.image) : null;
+    if (pic) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r - ctx.lineWidth / 2, 0, Math.PI * 2); ctx.clip();
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(pic, cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      const emoji = /\p{Extended_Pictographic}/u.test(tk.label);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = emoji ? `${r * 1.15}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif` : `700 ${r * (tk.label.length > 2 ? 0.7 : 0.9)}px Inter, system-ui, sans-serif`;
+      ctx.fillStyle = '#fff';
+      if (!emoji) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.strokeText(tk.label, cx, cy + r * 0.04); }
+      ctx.fillText(tk.label, cx, cy + r * (emoji ? 0.08 : 0.04));
+    }
 
     if (tk.down) {
       ctx.fillStyle = 'rgba(20,20,20,0.6)';
@@ -723,4 +733,18 @@ function lighten(hex: string, amt: number) {
   const n = parseInt(hex.slice(1, 7), 16);
   const f = (v: number) => Math.round(v + (255 - v) * amt);
   return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+
+const pictures = new Map<string, HTMLImageElement | null>();
+/** A loaded token picture, or null while it loads (the label shows meanwhile). */
+function tokenImage(src: string): HTMLImageElement | null {
+  const hit = pictures.get(src);
+  if (hit !== undefined) return hit && hit.complete && hit.naturalWidth ? hit : null;
+  const im = new Image();
+  im.decoding = 'async';
+  im.onerror = () => pictures.set(src, null);
+  im.src = src;
+  pictures.set(src, im);
+  if (pictures.size > 400) pictures.delete(pictures.keys().next().value!);
+  return null;
 }

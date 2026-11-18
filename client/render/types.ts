@@ -17,6 +17,8 @@ export interface RenderToken {
   hpRatio: number | null;
   /** Text under the token, e.g. "12/20" or "bloodied". */
   hpText: string | null;
+  /** Picture to show instead of the label, as a URL. */
+  image: string | null;
 }
 
 export interface RenderMap {

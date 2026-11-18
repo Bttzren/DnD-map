@@ -77,6 +77,8 @@ export interface Token {
   hpVisibility: HpVisibility;
   /** Initiative bonus, used when rolling. DM only. */
   initMod?: number;
+  /** Picture id (a key of Game.images), shown instead of the label. */
+  image?: string;
 }
 
 export interface AreaTemplate {
@@ -152,7 +154,17 @@ export interface Game {
   screen: ScreenState;
   createdAt: number;
   updatedAt: number;
+  /** Token pictures: id -> small square image as a data: URL. */
+  images?: Record<string, string>;
 }
+
+/** Token pictures are small squares, so these limits are generous. */
+export const IMAGE_ID_RE = /^[a-z0-9]{8,40}$/;
+export const MAX_IMAGE_CHARS = 150_000;
+export const MAX_IMAGES = 200;
+const IMAGE_DATA_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+export const isImageData = (v: unknown): v is string => typeof v === 'string' && v.length <= MAX_IMAGE_CHARS && IMAGE_DATA_RE.test(v);
+export const isImageId = (v: unknown): v is string => typeof v === 'string' && IMAGE_ID_RE.test(v);
 
 export const MAP_MIN = 10;
 export const MAP_MAX = 80;

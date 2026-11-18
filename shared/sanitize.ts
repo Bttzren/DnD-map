@@ -3,7 +3,7 @@
 import type { Coll, CollTypes } from './ops';
 import {
   AMBIENCES, DISTANCE_RULES, DOOR_STATES, HP_VISIBILITY, OBJECT_KINDS, TEMPLATE_SHAPES, THEMES, TOKEN_KINDS,
-  defaultScreen, defaultSettings,
+  MAX_IMAGES, defaultScreen, defaultSettings, isImageData, isImageId,
   type AreaTemplate, type Door, type Drawing, type Initiative, type Label, type MapData, type MapObject,
   type MapSettings, type Room, type ScreenState, type Token,
 } from './types';
@@ -45,6 +45,7 @@ function token(r: Raw, m: Dims): Token | null {
     hpVisibility: oneOf(r.hpVisibility, HP_VISIBILITY, kind === 'player' || kind === 'ally' ? 'exact' : 'vague'),
   };
   if (typeof r.initMod === 'number') out.initMod = int(r.initMod, 0, -20, 20);
+  if (isImageId(r.image)) out.image = r.image;
   return out;
 }
 
@@ -164,4 +165,15 @@ export function sanitizeMap(m: MapData): MapData {
     templates: clean('templates'), drawings: clean('drawings'), labels: clean('labels'),
     initiative: sanitizeInitiative(m.initiative), settings: sanitizeSettings(m.settings),
   };
+}
+
+/** Keep only well-formed pictures, up to the limit. */
+export function sanitizeImages(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  let n = 0;
+  for (const [k, d] of Object.entries(obj(v))) {
+    if (n >= MAX_IMAGES) break;
+    if (isImageId(k) && isImageData(d)) { out[k] = d; n++; }
+  }
+  return out;
 }

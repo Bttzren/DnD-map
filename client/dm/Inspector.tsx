@@ -3,7 +3,8 @@ import { findMap } from '../../shared/ops';
 import { CONDITIONS, HP_VISIBILITY, TOKEN_KINDS, uid, type HpVisibility, type Token } from '../../shared/types';
 import { hpLabel } from '../../shared/view';
 import { conditionColor } from '../render/mapView';
-import { Icon, NumField, Seg, Switch, confirmDialog, toast, useStore } from '../ui';
+import { Avatar, Icon, NumField, Seg, Switch, confirmDialog, toast, useStore } from '../ui';
+import { fileToIcon, pickImage } from '../images';
 import type { DmCtl } from './state';
 import { freeSpots } from './tools';
 
@@ -55,6 +56,21 @@ export function Inspector({ ctl }: { ctl: DmCtl }) {
   };
 
   const inInit = map.initiative.entries.some((e) => e.tokenId === t.id);
+  // Tokens added in a batch are named "Goblin 1", "Goblin 2"...: offer to share a picture with the rest.
+  const base = t.name.replace(/\s*\d+$/, '');
+  const kin = map.tokens.filter((x) => x.id !== t.id && x.name.replace(/\s*\d+$/, '') === base && x.image !== t.image);
+  const pic = t.image ? ctl.state.game?.images?.[t.image] ?? null : null;
+  const choosePicture = async () => {
+    const file = await pickImage();
+    if (!file) return;
+    try {
+      const icon = await fileToIcon(file);
+      ctl.begin();
+      ctl.dispatch({ t: 'image.put', id: icon.id, data: icon.data });
+      put({ image: icon.id });
+      ctl.end();
+    } catch (e) { toast((e as Error).message, 'error'); }
+  };
 
   return (
     <div class="card inspector" onKeyDown={(e) => e.stopPropagation()}>
@@ -62,6 +78,20 @@ export function Inspector({ ctl }: { ctl: DmCtl }) {
         <input class="input sm" style={{ width: '46px', textAlign: 'center', fontSize: '18px', padding: 0 }} value={t.label} maxLength={3} onChange={(e) => put({ label: e.currentTarget.value || '?' })} title="Emoji or initials" />
         <input class="input sm grow" value={t.name} maxLength={40} onChange={(e) => put({ name: e.currentTarget.value || 'Token' })} style={{ fontWeight: 600 }} />
         <button class="btn ghost sm icon" onClick={() => ctl.set({ selected: [] })} aria-label="Close"><Icon name="x" size={15} /></button>
+      </div>
+
+      <div class="section">
+        <span class="label">Picture</span>
+        <div class="pic-row">
+          <Avatar label={t.label} color={t.color} image={pic} />
+          <button class="btn sm" onClick={() => void choosePicture()}><Icon name="camera" size={15} /> {pic ? 'Change' : 'Upload'}</button>
+          {pic && <button class="btn ghost sm" onClick={() => { const { image: _i, ...rest } = t; ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'tokens', item: rest }); }}>Remove</button>}
+        </div>
+        {t.image && kin.length > 0 && (
+          <button class="btn ghost sm" onClick={() => { ctl.begin(); kin.forEach((x) => ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'tokens', item: { ...x, image: t.image } })); ctl.end(); toast(`Picture used for ${kin.length} more`, 'ok'); }}>
+            Use for the other {kin.length} “{base}”
+          </button>
+        )}
       </div>
 
       <div class="section">

@@ -20,7 +20,9 @@ export type ClientMsg =
   | { type: 'ping'; x: number; y: number; focus: boolean }
   | { type: 'view'; cx: number; cy: number; zoom: number }
   | ({ type: 'ai' } & AiRequest)
-  | { type: 'hb' };
+  | { type: 'hb' }
+  /** A player sets (or clears, with id null) the picture of a party token they can see. */
+  | { type: 'icon'; tokenId: string; id: string | null; data?: string };
 
 /** Map fields that rarely change (terrain, fog, doors, objects). */
 export type PlayerStatic = Pick<PlayerMap, 'id' | 'name' | 'width' | 'height' | 'theme' | 'terrain' | 'fog' | 'doors' | 'objects'>;

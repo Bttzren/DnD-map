@@ -1,8 +1,9 @@
 import type { PlayerDynamic, PlayerStatic } from '../../shared/protocol';
 import type { MapData } from '../../shared/types';
+import type { ImageResolver } from '../images';
 import type { RenderMap } from './types';
 
-export function fromDmMap(m: MapData): RenderMap {
+export function fromDmMap(m: MapData, img: ImageResolver): RenderMap {
   const init = m.initiative;
   return {
     id: m.id, name: m.name, width: m.width, height: m.height, theme: m.theme, settings: m.settings,
@@ -14,11 +15,12 @@ export function fromDmMap(m: MapData): RenderMap {
       down: t.down, hidden: t.hidden, conditions: t.conditions,
       hpRatio: t.hp !== null && t.maxHp ? t.hp / t.maxHp : null,
       hpText: t.hp !== null && t.maxHp ? `${t.hp}/${t.maxHp}` : null,
+      image: img(t.image),
     })),
   };
 }
 
-export function fromPlayerView(s: PlayerStatic, d: PlayerDynamic): RenderMap {
+export function fromPlayerView(s: PlayerStatic, d: PlayerDynamic, img: ImageResolver): RenderMap {
   return {
     id: s.id, name: s.name, width: s.width, height: s.height, theme: s.theme, settings: d.settings,
     terrain: s.terrain, fog: null, doors: s.doors, objects: s.objects, rooms: [],
@@ -29,6 +31,7 @@ export function fromPlayerView(s: PlayerStatic, d: PlayerDynamic): RenderMap {
       down: t.down, hidden: false, conditions: t.conditions,
       hpRatio: t.hp ? t.hp.cur / t.hp.max : t.hpBar,
       hpText: t.hp ? `${t.hp.cur}/${t.hp.max}` : t.hpLabel,
+      image: img(t.image),
     })),
   };
 }
