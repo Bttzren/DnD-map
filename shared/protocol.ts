@@ -1,3 +1,4 @@
+import type { RollResult } from './dice';
 import type { Op } from './ops';
 import type { Game, MapData, ScreenState, Theme } from './types';
 import type { PlayerMap } from './view';
@@ -17,9 +18,12 @@ export type ClientMsg =
   | { type: 'join'; code: string; role: Role; secret?: string; name?: string }
   | { type: 'op'; op: Op }
   | { type: 'restore'; game: Game }
-  | { type: 'ping'; x: number; y: number; focus: boolean }
+  /** Players may ping too (never with focus). `as` is the party token they play, for its colour. */
+  | { type: 'ping'; x: number; y: number; focus: boolean; as?: string }
   | { type: 'view'; cx: number; cy: number; zoom: number }
   | ({ type: 'ai' } & AiRequest)
+  /** Ask the server to roll dice. `secret` (DM only) keeps it from players. */
+  | { type: 'roll'; expr: string; label?: string; secret?: boolean; as?: string }
   | { type: 'hb' }
   /** A player sets (or clears, with id null) the picture of a party token they can see. */
   | { type: 'icon'; tokenId: string; id: string | null; data?: string };
@@ -37,8 +41,9 @@ export type ServerMsg =
   | { type: 'op'; op: Op }
   | { type: 'pview'; screen?: ScreenState; static?: PlayerStatic | null; dynamic?: PlayerDynamic | null }
   | { type: 'presence'; players: Watcher[] }
-  | { type: 'ping'; x: number; y: number; focus: boolean }
+  | { type: 'ping'; x: number; y: number; focus: boolean; by?: string; color?: string }
   | { type: 'view'; cx: number; cy: number; zoom: number }
+  | { type: 'roll'; roll: RollResult }
   | { type: 'ai.result'; reqId: string; map: MapData }
   | { type: 'ai.error'; reqId: string; message: string }
   | { type: 'error'; code: 'no-room' | 'bad-secret' | 'bad-op' | 'bad-message' | 'not-allowed'; message?: string };

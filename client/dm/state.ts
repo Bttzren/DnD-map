@@ -9,6 +9,7 @@ import {
 import { loadBackup, pref, rememberGame, saveBackup, secretFor } from '../local';
 import { Connection, type Status } from '../net';
 import type { Ping } from '../render/types';
+import type { RollResult } from '../../shared/dice';
 import { Store, toast } from '../ui';
 
 export type Tool = 'select' | 'paint' | 'door' | 'object' | 'fog' | 'ruler' | 'template' | 'draw' | 'label' | 'ping';
@@ -62,6 +63,8 @@ export interface DmState {
   canUndo: boolean;
   canRedo: boolean;
   pings: Ping[];
+  /** Recent dice rolls, newest first. */
+  rolls: RollResult[];
 }
 
 const DEFAULT_OPTS: ToolOpts = {
@@ -95,7 +98,7 @@ export class DmCtl extends Store<DmState> {
       code, secret, status: 'connecting', fatal: secret ? null : 'no-secret', aiEnabled: false, aiBusy: false,
       game: null, mapId: null, players: [], tool: 'select', opts: { ...DEFAULT_OPTS, ...pref.get<Partial<ToolOpts>>('opts', {}) },
       selected: [], other: null, tab: 'generate', panelOpen: pref.get('panelOpen', true), showRooms: pref.get('showRooms', true),
-      fogTint: true, share: false, ver: 0, staticVer: 0, fogVer: 0, canUndo: false, canRedo: false, pings: [],
+      fogTint: true, share: false, ver: 0, staticVer: 0, fogVer: 0, canUndo: false, canRedo: false, pings: [], rolls: [],
     });
     this.conn = new Connection(
       () => ({ type: 'join', code, role: 'dm', secret: this.state.secret ?? '' }),
@@ -142,10 +145,16 @@ export class DmCtl extends Store<DmState> {
         if (m.players.length > before && this.state.ver > 0) toast(`${m.players[m.players.length - 1].name} joined the table`, 'ok');
         break;
       }
-      case 'ping': this.addPing(m.x, m.y); break;
+      case 'ping': this.addPing(m.x, m.y, m.color, m.by); break;
+      case 'roll': {
+        this.set({ rolls: [m.roll, ...this.state.rolls].slice(0, 60) });
+        if (m.roll.by !== 'DM') toast(`🎲 ${m.roll.by}${m.roll.label ? ` (${m.roll.label})` : ''}: ${m.roll.total}`, m.roll.crit === 'hit' ? 'ok' : 'info', 4000);
+        break;
+      }
       case 'ai.result': this.aiWaiters.get(m.reqId)?.(m.map); this.aiWaiters.delete(m.reqId); break;
       case 'ai.error': toast(m.message, 'error', 5000); this.aiWaiters.get(m.reqId)?.(null); this.aiWaiters.delete(m.reqId); break;
       case 'error':
+        if ((m.code === 'bad-message' || m.code === 'not-allowed') && m.message) { toast(m.message, 'error'); break; }
         if (m.code === 'no-room') {
           // The server lost this game (e.g. it restarted). Hand it our copy.
           const game = this.state.game ?? loadBackup(this.state.code) ?? { code: this.state.code, maps: [], liveMapId: null, screen: defaultScreen(), createdAt: Date.now(), updatedAt: Date.now() };
@@ -267,9 +276,14 @@ export class DmCtl extends Store<DmState> {
     this.set({ selected: [], other: null });
   }
 
-  addPing(x: number, y: number) {
+  addPing(x: number, y: number, color = '#facc15', label?: string) {
     const now = performance.now();
-    this.set({ pings: [...this.state.pings.filter((p) => now - p.t0 < 2500), { x, y, t0: now, color: '#facc15' }] });
+    this.set({ pings: [...this.state.pings.filter((p) => now - p.t0 < 2500), { x, y, t0: now, color, label }] });
+  }
+
+  /** Roll dice on the server; secret rolls stay with the DM. */
+  roll(expr: string, label: string, secret: boolean) {
+    this.conn.send({ type: 'roll', expr, label, secret }, false);
   }
 
   ping(x: number, y: number, focus: boolean) {

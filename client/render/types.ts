@@ -41,7 +41,7 @@ export interface RenderMap {
   activeTokenId: string | null;
 }
 
-export interface Ping { x: number; y: number; t0: number; color: string }
+export interface Ping { x: number; y: number; t0: number; color: string; label?: string }
 
 export interface Overlay {
   selectedTokenId?: string | null;

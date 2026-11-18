@@ -152,6 +152,51 @@ describe('server', () => {
     await p.next('pview', (m) => !!m.dynamic?.tokens.some((t) => t.id === hero.id && !t.image));
   });
 
+  it('relays player pings with their character colour, and rolls dice on the server', async () => {
+    const { port, base } = await start();
+    const { body: g } = await newGame(base);
+    const d = await dm(port, g.code, g.dmSecret);
+    await d.next('state');
+    const map = generateMap({ theme: 'dungeon', width: 30, height: 20, seed: 'dice' });
+    map.fog.fill(1);
+    const hero = makeToken({ name: 'Thalia', kind: 'player', color: '#8b5cf6', x: map.rooms[0].x, y: map.rooms[0].y });
+    map.tokens.push(hero);
+    d.send({ type: 'op', op: { t: 'map.put', map } });
+    const p1 = await player(port, g.code, 'Ana');
+    const p2 = await player(port, g.code, 'Bo');
+    await p1.next('pview', (m) => !!m.static);
+    await p2.next('pview', (m) => !!m.static);
+
+    p1.send({ type: 'ping', x: 3.7, y: 4.2, focus: true, as: hero.id });
+    const dp = await d.next('ping');
+    expect(dp).toMatchObject({ x: 3, y: 4, focus: false, by: 'Thalia', color: '#8b5cf6' });
+    expect(await p2.next('ping')).toMatchObject({ by: 'Thalia' });
+    p1.send({ type: 'ping', x: 999, y: 4, focus: false });
+    // Out of bounds is dropped; spam is limited.
+    for (let i = 0; i < 9; i++) p1.send({ type: 'ping', x: 1, y: 1, focus: false });
+    expect((await p1.next('error')).message).toMatch(/Too many pings/);
+
+    p2.send({ type: 'roll', expr: '2d6+3', label: 'Damage' });
+    const r = await d.next('roll');
+    expect(r.roll).toMatchObject({ by: 'Bo', text: '2d6+3', label: 'Damage', secret: false });
+    expect(r.roll.total).toBeGreaterThanOrEqual(5);
+    expect(r.roll.total).toBeLessThanOrEqual(15);
+    expect((await p1.next('roll')).roll.id).toBe(r.roll.id);
+    p2.send({ type: 'roll', expr: 'banana' });
+    expect((await p2.next('error')).code).toBe('bad-message');
+    // Players can't make secret rolls.
+    p2.send({ type: 'roll', expr: 'd20', secret: true });
+    expect((await p1.next('roll')).roll.secret).toBe(false);
+
+    // A DM secret roll reaches DMs only.
+    d.send({ type: 'roll', expr: 'd20+7', label: 'SECRET-STEALTH-CHECK', secret: true });
+    const sr = await d.next('roll', (m) => m.roll.secret);
+    expect(sr.roll.by).toBe('DM');
+    d.send({ type: 'roll', expr: 'd4', label: 'public' });
+    await p1.next('roll', (m) => m.roll.label === 'public');
+    for (const raw of [...p1.raw, ...p2.raw]) expect(raw).not.toContain('SECRET-STEALTH-CHECK');
+  });
+
   it('rejects a wrong DM secret and player ops', async () => {
     const { port, base } = await start();
     const { body: g } = await newGame(base);

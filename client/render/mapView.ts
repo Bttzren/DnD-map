@@ -29,6 +29,8 @@ export interface MapViewHandlers {
   hover?(e: CellEvent | null): void;
   tap?(e: CellEvent): void;
   dblclick?(e: CellEvent): void;
+  /** Press and hold without moving. */
+  longpress?(e: CellEvent): void;
   camera?(c: Camera): void;
 }
 
@@ -78,6 +80,8 @@ export class MapView {
   private pinchStart = { d: 0, z: 0, mx: 0, my: 0, cx: 0, cy: 0 };
   private downAt = { x: 0, y: 0, t: 0 };
   private moved = false;
+  private holdTimer: ReturnType<typeof setTimeout> | 0 = 0;
+  private held = false;
   private camTarget: Camera | null = null;
   private hoverToken: string | null = null;
   private ro: ResizeObserver;
@@ -314,13 +318,24 @@ export class MapView {
         if (this.gesture === 'tool') this.handlers.cancel?.();
         const [a, b] = [...this.pointers.values()];
         this.gesture = 'pinch';
+        clearTimeout(this.holdTimer);
         this.pinchStart = { d: Math.hypot(a.x - b.x, a.y - b.y), z: this.cam.z, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, cx: this.cam.x, cy: this.cam.y };
         return;
       }
       if (this.pointers.size > 2) return;
       this.downAt = { x: e.clientX, y: e.clientY, t: performance.now() };
       this.moved = false;
+      this.held = false;
       const ce = this.ev(e);
+      clearTimeout(this.holdTimer);
+      if (this.handlers.longpress && e.button === 0) {
+        this.holdTimer = setTimeout(() => {
+          if (this.moved || this.pointers.size !== 1 || this.gesture === 'tool') return;
+          this.held = true;
+          navigator.vibrate?.(20);
+          this.handlers.longpress?.(ce);
+        }, 550);
+      }
       const forcePan = e.button === 1 || e.button === 2 || this.spaceDown;
       if (!forcePan && this.handlers.down?.(ce)) this.gesture = 'tool';
       else {
@@ -332,7 +347,7 @@ export class MapView {
     c.addEventListener('pointermove', (e) => {
       const r = c.getBoundingClientRect();
       if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, { x: e.clientX - r.left, y: e.clientY - r.top });
-      if (Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y) > 5) this.moved = true;
+      if (Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y) > 5) { this.moved = true; clearTimeout(this.holdTimer); }
       if (this.gesture === 'pinch' && this.pointers.size >= 2) {
         const [a, b] = [...this.pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
@@ -364,11 +379,12 @@ export class MapView {
 
     const end = (e: PointerEvent) => {
       if (!this.pointers.delete(e.pointerId)) return;
+      clearTimeout(this.holdTimer);
       const ce = this.ev(e);
       if (this.gesture === 'tool') this.handlers.up?.(ce);
       if (this.pointers.size === 0) {
         const wasPinch = this.gesture === 'pinch';
-        if (!this.moved && !wasPinch && performance.now() - this.downAt.t < 450 && e.button === 0) this.handlers.tap?.(ce);
+        if (!this.moved && !wasPinch && !this.held && performance.now() - this.downAt.t < 450 && e.button === 0) this.handlers.tap?.(ce);
         this.gesture = 'none';
       } else if (this.gesture === 'pinch' && this.pointers.size === 1) {
         // Continue as a pan with the remaining finger.
@@ -565,6 +581,14 @@ export class MapView {
       }
       ctx.fillStyle = p.color;
       ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill();
+      if (p.label && age < 2) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (2 - age) * 2);
+        ctx.font = '600 13px Inter, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.strokeText(p.label, s.x, s.y - 12);
+        ctx.fillStyle = p.color; ctx.fillText(p.label, s.x, s.y - 12);
+        ctx.restore();
+      }
     }
 
     this.drawAmbience(map.settings.ambience, dt, w, h, t);

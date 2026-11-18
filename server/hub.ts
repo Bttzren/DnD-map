@@ -1,6 +1,7 @@
 // Live rooms: who is connected, applying DM ops, and pushing each player
 // the filtered view.
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
+import { parseDice, rollPlan, type RollResult } from '../shared/dice';
 import type { WebSocket } from 'ws';
 import { buildMapFromPlan } from '../shared/build';
 import { applyOp, findMap, validateMap, type Op } from '../shared/ops';
@@ -28,6 +29,8 @@ interface Client {
   queue: Promise<void>;
   /** When this player last changed a picture, for rate limiting. */
   iconTimes?: number[];
+  pingTimes?: number[];
+  rollTimes?: number[];
 }
 
 interface Room {
@@ -160,7 +163,11 @@ export class Hub {
     if (msg.type === 'join') return this.join(c, msg);
     if (msg.type === 'restore') return this.restore(c, msg.game);
     const room = c.code ? this.rooms.get(c.code) : undefined;
-    if (msg.type === 'icon' && room && c.role === 'player' && room.players.has(c)) return this.icon(c, room, msg);
+    if (msg.type === 'roll' && room && (room.players.has(c) || room.dms.has(c))) return this.roll(c, room, msg);
+    if (room && c.role === 'player' && room.players.has(c)) {
+      if (msg.type === 'icon') return this.icon(c, room, msg);
+      if (msg.type === 'ping') return this.playerPing(c, room, msg);
+    }
     if (!room || c.role !== 'dm' || !room.dms.has(c)) return send(c.ws, { type: 'error', code: 'not-allowed' });
 
     switch (msg.type) {
@@ -221,6 +228,52 @@ export class Hub {
     }
     c.iconTimes.push(now);
     for (const op of ops) { applyOp(room.game, op); this.relay(room, op, null); }
+  }
+
+  /** Allow `max` actions per `ms` per client; false (and an error) when over. */
+  private limit(c: Client, key: 'pingTimes' | 'rollTimes', max: number, ms: number, what: string): boolean {
+    const now = Date.now();
+    const times = (c[key] ?? []).filter((t) => now - t < ms);
+    c[key] = times;
+    if (times.length >= max) { send(c.ws, { type: 'error', code: 'not-allowed', message: `Too many ${what}. Give it a moment.` }); return false; }
+    times.push(now);
+    return true;
+  }
+
+  /** Who a player is at the table: the party token they say they play (if they can see it), else their name. */
+  private identity(c: Client, room: Room, as: unknown): { by: string; color: string | null } {
+    if (c.role === 'dm') return { by: 'DM', color: '#e0b84a' };
+    const map = findMap(room.game, room.game.liveMapId);
+    const t = typeof as === 'string' && map ? visibleTokens(map).find((x) => x.id === as && x.kind === 'player') : undefined;
+    return t ? { by: t.name, color: t.color } : { by: c.name, color: null };
+  }
+
+  private playerPing(c: Client, room: Room, msg: Extract<ClientMsg, { type: 'ping' }>) {
+    const map = findMap(room.game, room.game.liveMapId);
+    if (!map || ![msg.x, msg.y].every(Number.isFinite) || msg.x < 0 || msg.y < 0 || msg.x >= map.width || msg.y >= map.height) return;
+    if (!this.limit(c, 'pingTimes', 8, 10_000, 'pings')) return;
+    const who = this.identity(c, room, msg.as);
+    const out = JSON.stringify({ type: 'ping', x: Math.floor(msg.x), y: Math.floor(msg.y), focus: false, by: who.by, color: who.color ?? '#7dd3fc' } satisfies ServerMsg);
+    for (const d of room.dms) send(d.ws, out);
+    for (const p of room.players) if (p !== c) send(p.ws, out);
+  }
+
+  /** Roll on the server, so results can't be faked. DM secret rolls only go to DMs. */
+  private roll(c: Client, room: Room, msg: Extract<ClientMsg, { type: 'roll' }>) {
+    const plan = parseDice(String(msg.expr ?? ''));
+    if (!plan) return send(c.ws, { type: 'error', code: 'bad-message', message: 'Try something like d20+5, 2d6+3 or d20 adv.' });
+    if (!this.limit(c, 'rollTimes', 10, 10_000, 'rolls')) return;
+    const who = this.identity(c, room, msg.as);
+    const secret = c.role === 'dm' && msg.secret === true;
+    const roll: RollResult = {
+      id: randomBytes(5).toString('hex'), ...who,
+      label: typeof msg.label === 'string' ? msg.label.trim().slice(0, 40) : '',
+      secret, at: Date.now(),
+      ...rollPlan(plan, (faces) => randomInt(1, faces + 1)),
+    };
+    const out = JSON.stringify({ type: 'roll', roll } satisfies ServerMsg);
+    for (const d of room.dms) send(d.ws, out);
+    if (!secret) for (const p of room.players) send(p.ws, out);
   }
 
   /** A token picture, for the image endpoint. */
