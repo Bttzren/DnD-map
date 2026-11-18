@@ -121,6 +121,15 @@ unrevealed areas, hidden tokens and traps, secret doors (they look like
 wall), room names, your notes, and hidden drawings and labels. Monsters
 standing in fog aren't sent at all.
 
+## Map art
+
+Maps are drawn with real textures (stone, wood, cobbles, grass, water,
+lava) from [Poly Haven](https://polyhaven.com), which are CC0 (public
+domain). They live in `public/textures/`, with the list of sources in
+`public/textures/CREDITS.md`. To change them, edit and run
+`scripts/fetch-textures.py`. If the textures can't load, maps fall back to
+plain drawn colours.
+
 ## Development
 
 ```bash
@@ -138,6 +147,7 @@ shared/   map model, generators, map builder, op reducer, player-view filter
 server/   HTTP + WebSocket server, game storage, AI generator
 client/   DM and player screens, canvas renderer
 tests/    unit and server tests
-scripts/  end-to-end test
+scripts/  end-to-end test, texture fetcher
+public/   textures
 docs/     design and implementation plan
 ```

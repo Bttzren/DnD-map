@@ -7,8 +7,8 @@ import type { RenderMap } from './types';
 
 export function cachePx(w: number, h: number): number {
   const small = typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 700;
-  const budget = small ? 2400 : 3200;
-  return Math.max(16, Math.min(48, Math.floor(budget / Math.max(w, h))));
+  const budget = small ? 2304 : 3200;
+  return Math.max(16, Math.min(small ? 48 : 64, Math.floor(budget / Math.max(w, h))));
 }
 
 const isFloorish = (t: Terrain) => t !== 'wall' && t !== 'void' && t !== 'trees';

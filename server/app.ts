@@ -20,6 +20,7 @@ const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json',
   '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain; charset=utf-8',
+  '.webp': 'image/webp', '.jpg': 'image/jpeg', '.md': 'text/markdown; charset=utf-8',
 };
 
 function json(res: http.ServerResponse, status: number, body: unknown) {
@@ -112,7 +113,8 @@ async function serveStatic(root: string, pathname: string, res: http.ServerRespo
   const ext = path.extname(file);
   res.writeHead(200, {
     'content-type': MIME[ext] ?? 'application/octet-stream',
-    'cache-control': file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
+    'cache-control': file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable'
+      : file.includes(`${path.sep}textures${path.sep}`) ? 'public, max-age=86400' : 'no-cache',
   });
   createReadStream(file).pipe(res);
 }

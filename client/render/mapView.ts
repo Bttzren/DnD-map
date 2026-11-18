@@ -1,9 +1,12 @@
 // A canvas that shows a RenderMap with a pannable, zoomable camera.
 // Input is translated to cell coordinates and handed to a controller.
+import { cellNoise } from '../../shared/rng';
 import { templateCells } from '../../shared/templates';
 import type { AreaTemplate } from '../../shared/types';
 import { PALETTES } from './palette';
 import { cachePx, drawFog, drawStatic, roundRect } from './staticLayer';
+import { drawStaticTextured } from './texturedLayer';
+import { loadTextures, texturesReady } from './textures';
 import type { Overlay, RenderMap, RenderToken } from './types';
 
 export interface CellEvent {
@@ -51,6 +54,12 @@ export class MapView {
   private px = 32;
   private staticKey = '';
   private fogKey = '';
+  private lastStatic = 0;
+  private lastChange = 0;
+  private fullPx = 0;
+  private dims = '';
+  private pendingStatic: ReturnType<typeof setTimeout> | 0 = 0;
+  private dead = false;
   private raf = 0;
   private last = performance.now();
   private tween = new Map<string, { x: number; y: number }>();
@@ -78,9 +87,13 @@ export class MapView {
     this.bindInput();
     const loop = (t: number) => { this.frame(t); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
+    // Draw with the procedural look straight away, then switch to textures once they arrive.
+    loadTextures().then((ok) => { if (ok && !this.dead && this.map) this.redrawStatic(); });
   }
 
   destroy() {
+    this.dead = true;
+    clearTimeout(this.pendingStatic);
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
     this.canvas.remove();
@@ -92,15 +105,48 @@ export class MapView {
     this.map = map;
     if (!map) return;
     if (staticKey !== this.staticKey) {
-      this.px = cachePx(map.width, map.height);
-      drawStatic(map, this.staticCanvas, this.px, this.dm);
       this.staticKey = staticKey;
+      const px = cachePx(map.width, map.height);
+      const resized = px !== this.fullPx || this.dims !== `${map.width}x${map.height}`;
+      const now = performance.now();
+      const burst = now - this.lastChange < 600;
+      this.lastChange = now;
+      clearTimeout(this.pendingStatic); this.pendingStatic = 0;
+      if (first || resized || !burst) {
+        // A one-off change (a door, a new map) is drawn in full straight away.
+        this.redrawStatic(false);
+        // Count the burst from when drawing finished, so a slow device still gets drafts.
+        this.lastChange = performance.now();
+        if (resized) this.fogKey = '';
+      } else {
+        // While painting, draw a quick half-resolution version now and then,
+        // and the full one once things settle.
+        if (now - this.lastStatic > 120) this.redrawStatic(true);
+        this.lastChange = performance.now();
+        this.pendingStatic = setTimeout(() => { this.pendingStatic = 0; if (!this.dead) this.redrawStatic(false); }, 450);
+      }
     }
     if (this.dm && fogKey !== this.fogKey) {
       drawFog(map, this.fogCanvas, this.px);
       this.fogKey = fogKey;
     }
     if (first) this.fit();
+  }
+
+  /** Redraw the cached terrain layer for the current map; a draft is half resolution. */
+  private redrawStatic(draft = false) {
+    const map = this.map;
+    if (!map) return;
+    const full = cachePx(map.width, map.height);
+    this.fullPx = full;
+    this.dims = `${map.width}x${map.height}`;
+    const px = draft ? Math.max(12, Math.round(full / 2)) : full;
+    if (px !== this.px) this.fogKey = '';
+    this.px = px;
+    if (texturesReady()) drawStaticTextured(map, this.staticCanvas, px, this.dm);
+    else drawStatic(map, this.staticCanvas, px, this.dm);
+    this.lastStatic = performance.now();
+    if (this.dm && !this.fogKey && map.fog) { drawFog(map, this.fogCanvas, px); this.fogKey = 'redrawn'; }
   }
 
   get size() { return { w: this.canvas.width / this.dpr, h: this.canvas.height / this.dpr }; }
@@ -306,9 +352,14 @@ export class MapView {
     ctx.save();
     ctx.translate(ox, oy);
     ctx.scale(z / this.px, z / this.px);
-    ctx.imageSmoothingEnabled = z < this.px * 1.5;
+    ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
+    // Shadow from a plain rectangle under the map: far cheaper than shadowing the image itself.
+    ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, this.staticCanvas.width, this.staticCanvas.height);
+    ctx.restore();
     ctx.drawImage(this.staticCanvas, 0, 0);
     ctx.restore();
 
@@ -319,17 +370,20 @@ export class MapView {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const ter = map.terrain[y * map.width + x];
       if (ter === 'water' || ter === 'deepwater') {
-        ctx.strokeStyle = pal.waterHi;
+        // A few glints that drift and fade, rather than ripples in every square.
+        const n = cellNoise(x, y, 77);
+        if (n < 0.45) continue;
+        const a = Math.max(0, Math.sin(t * (0.8 + n) + n * 40));
+        if (a < 0.05) continue;
+        ctx.strokeStyle = `rgba(215,240,255,${(0.32 * a).toFixed(3)})`;
+        const gx = x + 0.2 + cellNoise(x, y, 78) * 0.5, gy = y + 0.25 + cellNoise(x, y, 79) * 0.5 + Math.sin(t * 0.7 + n * 9) * 0.05;
         ctx.beginPath();
-        for (let k = 0; k < 2; k++) {
-          const yy = y + 0.3 + k * 0.4 + Math.sin(t * 1.4 + x * 0.9 + k) * 0.06;
-          ctx.moveTo(x + 0.15, yy);
-          ctx.quadraticCurveTo(x + 0.5, yy - 0.08 + Math.sin(t * 2 + y + k) * 0.05, x + 0.85, yy);
-        }
+        ctx.moveTo(gx, gy);
+        ctx.quadraticCurveTo(gx + 0.15, gy - 0.06, gx + 0.3, gy);
         ctx.stroke();
       } else if (ter === 'lava') {
-        ctx.fillStyle = `rgba(255,200,60,${0.12 + 0.1 * Math.sin(t * 2 + x * 1.3 + y * 0.7)})`;
-        ctx.fillRect(x, y, 1, 1);
+        ctx.fillStyle = `rgba(255,190,70,${0.08 + 0.08 * Math.sin(t * 2 + x * 1.3 + y * 0.7)})`;
+        ctx.beginPath(); ctx.arc(x + 0.5, y + 0.5, 0.62, 0, Math.PI * 2); ctx.fill();
       }
     }
     ctx.restore();
