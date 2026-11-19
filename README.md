@@ -21,11 +21,29 @@ npm start
 
 Open <http://localhost:3000>, press **Start a new game**, and share the code.
 
-### Playing in person
+### Playing in person: the desktop app
 
-Run it on your laptop. When it starts it prints addresses like
-`http://192.168.1.20:3000`. Players on the same wifi open that address (or
-scan the QR on the **Invite** screen) and enter the code.
+Only the DM installs anything. Download **DnD Map** for Windows, macOS or
+Linux from the [releases page](https://github.com/bttzren/dnd-map/releases),
+open it, and press **Start a new game**. Press **Invite** and your players
+scan the QR code with their phone camera (or type the link). They need to be
+on the same wifi as your computer.
+
+- The first time, your computer asks whether DnD Map may accept incoming
+  connections. Choose **Allow**, or phones can't join.
+- The installers aren't signed with paid certificates yet. On Windows, if
+  SmartScreen warns, choose **More info**, then **Run anyway**. On macOS,
+  right-click the app and choose **Open** the first time.
+- Games are saved on your computer. For free AI maps, install
+  [Ollama](https://ollama.com/download) (see below).
+
+You can also run it from source on your laptop with `npm start`. It prints
+addresses like `http://192.168.1.20:3000`, and the QR on the **Invite** screen
+uses them, even if you opened the app as `localhost`.
+
+To publish installers: every push builds them (see the **Desktop app**
+workflow's artifacts); pushing a tag such as `v0.2.0` also attaches them to
+a GitHub release.
 
 ### Playing online
 
@@ -171,7 +189,8 @@ shared/   map model, generators, map builder, op reducer, player-view filter
 server/   HTTP + WebSocket server, game storage, AI generator
 client/   DM and player screens, canvas renderer
 tests/    unit and server tests
-scripts/  end-to-end test, texture fetcher
+scripts/  end-to-end test, texture fetcher, desktop build helper
+desktop/  desktop app for the DM (Electron)
 public/   textures
 docs/     design and implementation plan
 ```

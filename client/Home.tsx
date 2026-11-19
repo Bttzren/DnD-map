@@ -2,6 +2,12 @@ import { useEffect, useState } from 'preact/hooks';
 import { normalizeCode } from '../shared/types';
 import { forgetGame, myGames, pref, rememberGame } from './local';
 import { navigate } from './nav';
+import { isLocalPage } from './origin';
+
+/** Running inside the DnD Map desktop app. */
+export const isDesktopApp = () => typeof navigator !== 'undefined' && /Electron/.test(navigator.userAgent);
+/** Where the DM can download the desktop app. */
+const APP_DOWNLOAD = 'https://github.com/bttzren/dnd-map/releases/latest';
 import { Icon, Logo, toast } from './ui';
 
 export function Home() {
@@ -57,7 +63,7 @@ export function Home() {
               </label>
             )}
             <button class="btn primary block" style={{ height: '44px' }} disabled={busy || !cfg}>{busy ? <span class="spinner" /> : <Icon name="sparkle" />} Start a new game</button>
-            {cfg && <p class="hint">{cfg.aiEnabled ? 'AI map generation is on for this server.' : 'AI generation is off on this server. The built-in generator is free and always works.'}</p>}
+            {cfg && <p class="hint">{cfg.aiEnabled ? 'AI map generation is on.' : isLocalPage() ? 'For free AI maps, install Ollama (see Generate). The built-in generator is free and always works.' : 'AI generation is off on this server. The built-in generator is free and always works.'}</p>}
             {games.length > 0 && (
               <div class="stack tight">
                 <span class="label">Your games</span>
@@ -76,6 +82,13 @@ export function Home() {
             )}
           </form>
 
+          {isDesktopApp() ? (
+            <div class="card home-card">
+              <div class="row"><Icon name="users" size={22} style={{ color: 'var(--gold-2)' }} /><h2>Your players</h2></div>
+              <p>They don't install anything. Start a game, press <b>Invite</b>, and they scan the QR code with their phone camera (or type the link). They need to be on the same wifi as this computer.</p>
+              <p class="hint">The first time, your computer may ask whether DnD Map can accept connections. Choose <b>Allow</b>, or phones won't be able to join.</p>
+            </div>
+          ) : (
           <form class="card home-card" onSubmit={join}>
             <div class="row"><Icon name="users" size={22} style={{ color: 'var(--gold-2)' }} /><h2>Join a game</h2></div>
             <p>Got a code from your DM? Pop it in. No account needed.</p>
@@ -88,7 +101,14 @@ export function Home() {
             </label>
             <button class="btn primary block" style={{ height: '44px' }}><Icon name="play" /> Join</button>
           </form>
+          )}
         </div>
+
+        {!isDesktopApp() && !isLocalPage() && (
+          <p class="hint" style={{ textAlign: 'center' }}>
+            DM running games at home? <a href={APP_DOWNLOAD} target="_blank" rel="noreferrer">Get the DnD Map app</a> for your computer. Players never need it.
+          </p>
+        )}
 
         <div class="feature-row">
           <div class="feature"><b>Instant maps</b><span>Dungeons, caves, crypts, sewers, forests and taverns.</span></div>

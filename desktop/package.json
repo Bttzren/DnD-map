@@ -1,0 +1,80 @@
+{
+  "name": "dnd-map-desktop",
+  "productName": "DnD Map",
+  "version": "0.1.0",
+  "description": "Run DnD Map on your computer. Players join from their phones.",
+  "author": "DnD Map",
+  "main": "main.cjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1"
+  },
+  "build": {
+    "appId": "app.dndmap.desktop",
+    "productName": "DnD Map",
+    "artifactName": "DnD-Map-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "main.cjs",
+      "app/**",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.games",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Game",
+      "syncDesktopName": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "bttzren",
+        "repo": "dnd-map"
+      }
+    ]
+  },
+  "repository": "https://github.com/bttzren/dnd-map",
+  "desktopName": "dnd-map.desktop"
+}

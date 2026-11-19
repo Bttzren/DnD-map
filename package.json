@@ -12,7 +12,8 @@
     "start": "node dist/server.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "e2e": "npm run build && node scripts/e2e.mjs"
+    "e2e": "npm run build && node scripts/e2e.mjs",
+    "desktop:prepare": "vite build && node scripts/desktop-prepare.mjs"
   },
   "engines": {
     "node": ">=20"
