@@ -9,9 +9,10 @@ import {
 import { loadBackup, pref, rememberGame, saveBackup, secretFor } from '../local';
 import { Connection, type Status } from '../net';
 import type { Ping } from '../render/types';
+import { TRAPS, trapSummary, trapsCrossed, type TrapType } from '../../shared/traps';
 import { Store, toast } from '../ui';
 
-export type Tool = 'select' | 'paint' | 'door' | 'object' | 'fog' | 'ruler' | 'template' | 'draw' | 'label' | 'ping';
+export type Tool = 'select' | 'paint' | 'door' | 'object' | 'trap' | 'fog' | 'ruler' | 'template' | 'draw' | 'label' | 'ping';
 export type Tab = 'generate' | 'tokens' | 'initiative' | 'map' | 'table';
 
 export interface ToolOpts {
@@ -23,6 +24,8 @@ export interface ToolOpts {
   doorState: DoorState;
   objectKind: ObjectKind;
   objectHidden: boolean;
+  trapType: TrapType;
+  trapHidden: boolean;
   tplShape: TemplateShape;
   tplSize: number;
   tplColor: string;
@@ -71,7 +74,7 @@ export interface DmState {
 
 const DEFAULT_OPTS: ToolOpts = {
   terrain: 'floor', brush: 1, autoWalls: true, fogMode: 'reveal', fogShape: 'room',
-  doorState: 'closed', objectKind: 'chest', objectHidden: false,
+  doorState: 'closed', objectKind: 'chest', objectHidden: false, trapType: 'spikes', trapHidden: true,
   tplShape: 'circle', tplSize: 20, tplColor: '#f97316', tplLabel: '', tplEffect: 'plain',
   drawColor: '#facc15', drawWidth: 2, drawHidden: false, labelColor: '#f4ead5', labelHidden: false,
 };
@@ -205,11 +208,25 @@ export class DmCtl extends Store<DmState> {
     if (!game) return;
     const mapId = 'mapId' in op ? op.mapId : op.t === 'map.put' ? op.map.id : null;
     if (mapId && opts.undoable !== false && this.batchDepth === 0) this.snapshot(mapId);
+    // Moving a token onto or across an armed trap: tell the DM.
+    let sprung: ReturnType<typeof trapsCrossed> = [];
+    let mover = '';
+    if (op.t === 'item.put' && op.coll === 'tokens') {
+      const m = findMap(game, op.mapId);
+      const before = m?.tokens.find((t) => t.id === op.item.id);
+      if (m && before) { sprung = trapsCrossed(m, before, before, op.item); mover = before.name; }
+    }
     try { applyOp(game, op); } catch (e) { toast(`Could not apply that: ${(e as Error).message}`, 'error'); return; }
     this.conn.send({ type: 'op', op });
     const [s, f] = touches(op);
     this.bump(s, f);
     this.scheduleBackup();
+    for (const o of sprung) {
+      const t = o.trap!;
+      toast(`⚠ ${mover} hit a ${TRAPS[t.type].label.toLowerCase()}: ${trapSummary(t)}`, 'error', 7000);
+      this.addPing(o.x, o.y, '#ef4444', `${TRAPS[t.type].label}!`);
+      this.set({ other: { coll: 'objects', id: o.id } });
+    }
   }
 
   /** Group several dispatches (a brush stroke, a drag) into one undo step. */

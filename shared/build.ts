@@ -1,6 +1,7 @@
 // Turns a LayoutPlan into a playable MapData: carves rooms and corridors,
 // places doors, walls, objects and (optionally) creatures, and guarantees
 // every room can be reached.
+import { trapFor } from './traps';
 import { cellNoise, makeRng, type Rng } from './rng';
 import { DIRS4, DIRS8, flood, footprint, idx, inBounds, isOpen } from './grid';
 import { sanitizePlan, type LayoutPlan, type PlanRoom } from './plan';
@@ -266,7 +267,10 @@ export function buildMapFromPlan(raw: unknown, opts: BuildOptions): MapData {
     }
     if (cell < 0) continue;
     occupied.add(cell);
-    objects.push({ id: `obj${objects.length + 1}`, x: cell % map.width, y: Math.floor(cell / map.width), kind: o.kind, ...(o.hidden ? { hidden: true } : {}) });
+    objects.push({
+      id: `obj${objects.length + 1}`, x: cell % map.width, y: Math.floor(cell / map.width), kind: o.kind, ...(o.hidden ? { hidden: true } : {}),
+      ...(o.kind === 'trap' ? { trap: trapFor(opts.theme, Math.floor(rng.next() * 1e6), objects.length) } : {}),
+    });
   }
   map.objects = objects;
 

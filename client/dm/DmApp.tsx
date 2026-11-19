@@ -2,6 +2,7 @@ import { Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { OBJECT_KINDS, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, TERRAINS, type Terrain } from '../../shared/types';
 import { EFFECTS, SPELLS, spellByName } from '../render/spells';
+import { TRAPS, TRAP_TYPES } from '../../shared/traps';
 import { secretFor } from '../local';
 import { navigate } from '../nav';
 import { fromDmMap } from '../render/adapt';
@@ -26,6 +27,7 @@ const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [
   { id: 'paint', icon: 'brush', label: 'Paint terrain', key: 'B' },
   { id: 'door', icon: 'door', label: 'Doors', key: 'D' },
   { id: 'object', icon: 'box', label: 'Objects', key: 'O' },
+  { id: 'trap', icon: 'trap', label: 'Traps', key: 'X' },
   { id: 'fog', icon: 'eye', label: 'Fog of war', key: 'F' },
   { id: 'ruler', icon: 'ruler', label: 'Measure', key: 'R' },
   { id: 'template', icon: 'circle', label: 'Spell areas', key: 'T' },
@@ -244,7 +246,7 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
             {s.tab === 'generate' && <GeneratePanel ctl={ctl} />}
             {s.tab === 'tokens' && <TokensPanel ctl={ctl} view={view} />}
             {s.tab === 'initiative' && <InitiativePanel ctl={ctl} view={view} />}
-            {s.tab === 'map' && <MapPanel ctl={ctl} />}
+            {s.tab === 'map' && <MapPanel ctl={ctl} view={view} />}
             {s.tab === 'table' && <TablePanel ctl={ctl} />}
           </div>
         </aside>
@@ -330,6 +332,19 @@ function ToolBar({ ctl }: { ctl: DmCtl }) {
           </div>
           <Switch checked={o.objectHidden} onChange={(v) => ctl.setOpts({ objectHidden: v })} label={<span class="small">Hidden</span>} />
           <span class="small faint">Click empty floor to place, click an object to remove, alt-click to hide/show</span>
+        </>
+      );
+      break;
+    case 'trap':
+      body = (
+        <>
+          <div class="row wrap" style={{ gap: '4px' }}>
+            {TRAP_TYPES.map((k) => (
+              <button key={k} class={`btn sm${o.trapType === k ? ' on' : ''}`} onClick={() => ctl.setOpts({ trapType: k })} title={`${TRAPS[k].label}: ${TRAPS[k].hint} (DC ${TRAPS[k].dc} ${TRAPS[k].save}, ${TRAPS[k].damage})`}>{TRAPS[k].label}</button>
+            ))}
+          </div>
+          <Switch checked={o.trapHidden} onChange={(v) => ctl.setOpts({ trapHidden: v })} label={<span class="small">Hidden from players</span>} />
+          <span class="small faint">Click floor to set a trap · click a trap to edit it · shift-click removes · you're warned when a token steps on one</span>
         </>
       );
       break;

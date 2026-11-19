@@ -13,6 +13,8 @@ export function tokenAt(map: MapData, x: number, y: number): Token | undefined {
 }
 
 function otherAt(map: MapData, fx: number, fy: number): Selection | null {
+  const trap = map.objects.find((o) => o.kind === 'trap' && o.x === Math.floor(fx) && o.y === Math.floor(fy));
+  if (trap) return { coll: 'objects', id: trap.id };
   const l = map.labels.find((l) => Math.abs(l.x - fx) < 1.2 && Math.abs(l.y - fy) < 0.6);
   if (l) return { coll: 'labels', id: l.id };
   const t = templateAt(map, fx, fy);
@@ -331,7 +333,18 @@ export function attachTools(view: MapView, ctl: DmCtl) {
           if (e.alt) ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'objects', item: { ...existing, hidden: !existing.hidden } });
           else ctl.dispatch({ t: 'item.delete', mapId: map.id, coll: 'objects', id: existing.id });
         } else {
-          ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'objects', item: { id: uid('obj'), x: e.x, y: e.y, kind: opts.objectKind, ...(opts.objectHidden ? { hidden: true } : {}) } });
+          ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'objects', item: { id: uid('obj'), x: e.x, y: e.y, kind: opts.objectKind, ...(opts.objectHidden ? { hidden: true } : {}), ...(opts.objectKind === 'trap' ? { trap: { type: opts.trapType, state: 'armed' as const } } : {}) } });
+        }
+      } else if (tool === 'trap') {
+        // Click to place; click a trap to edit it; shift-click removes it.
+        const existing = map.objects.find((o) => o.x === e.x && o.y === e.y);
+        if (existing?.kind === 'trap') {
+          if (e.shift) { ctl.dispatch({ t: 'item.delete', mapId: map.id, coll: 'objects', id: existing.id }); ctl.set({ other: null }); }
+          else ctl.set({ other: { coll: 'objects', id: existing.id }, selected: [] });
+        } else if (!existing && isOpen(map.terrain[idx(map, e.x, e.y)])) {
+          const id = uid('trap');
+          ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'objects', item: { id, x: e.x, y: e.y, kind: 'trap', ...(opts.trapHidden ? { hidden: true } : {}), trap: { type: opts.trapType, state: 'armed' } } });
+          ctl.set({ other: { coll: 'objects', id }, selected: [] });
         }
       } else if (tool === 'label') {
         const text = await promptDialog('Label text', '', 'Place label');

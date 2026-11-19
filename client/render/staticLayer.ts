@@ -4,6 +4,9 @@ import { cellNoise } from '../../shared/rng';
 import type { ObjectKind, Terrain } from '../../shared/types';
 import { FIXED_COLORS, PALETTES, PLAYER_VOID, shade, type Palette } from './palette';
 import type { RenderMap } from './types';
+import type { TrapInfo } from '../../shared/traps';
+
+type TrapLook = Pick<TrapInfo, 'type' | 'state'>;
 
 export function cachePx(w: number, h: number): number {
   const small = typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 700;
@@ -99,7 +102,7 @@ export function drawStatic(map: RenderMap, canvas: HTMLCanvasElement | Offscreen
   }
 
   for (const d of map.doors) drawDoor(ctx, d.x, d.y, d.state, px, T, dm);
-  for (const o of map.objects) drawObject(ctx, o.kind, o.x, o.y, px, !!o.hidden && dm);
+  for (const o of map.objects) drawObject(ctx, o.kind, o.x, o.y, px, !!o.hidden && dm, o.trap, dm);
 }
 
 function drawGround(ctx: CanvasRenderingContext2D, t: Terrain, x: number, y: number, px: number, p: Palette, outdoors: boolean) {
@@ -252,7 +255,7 @@ function drawDoor(ctx: CanvasRenderingContext2D, x: number, y: number, state: st
   ctx.restore();
 }
 
-export function drawObject(ctx: CanvasRenderingContext2D, kind: ObjectKind, x: number, y: number, px: number, ghost: boolean) {
+export function drawObject(ctx: CanvasRenderingContext2D, kind: ObjectKind, x: number, y: number, px: number, ghost: boolean, trap?: TrapLook, dm = true) {
   const cx = (x + 0.5) * px, cy = (y + 0.5) * px, s = px;
   ctx.save();
   if (ghost) ctx.globalAlpha = 0.55;
@@ -339,12 +342,9 @@ export function drawObject(ctx: CanvasRenderingContext2D, kind: ObjectKind, x: n
       break;
     }
     case 'trap': {
-      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = Math.max(1.5, s * 0.07);
-      ctx.setLineDash([s * 0.08, s * 0.06]);
-      ctx.strokeRect(cx - s * 0.36, cy - s * 0.36, s * 0.72, s * 0.72);
-      ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(cx - s * 0.2, cy - s * 0.2); ctx.lineTo(cx + s * 0.2, cy + s * 0.2); ctx.moveTo(cx + s * 0.2, cy - s * 0.2); ctx.lineTo(cx - s * 0.2, cy + s * 0.2); ctx.stroke();
-      break;
+      ctx.restore();
+      drawTrap(ctx, cx, cy, s, trap, dm, ghost);
+      return;
     }
   }
   ctx.restore();
@@ -428,4 +428,126 @@ function roundCorners(ctx: CanvasRenderingContext2D, map: RenderMap, px: number,
       ctx.fill();
     }
   }
+}
+
+const TRAP_COLOR: Record<TrapInfo['type'], string> = {
+  spikes: '#d4d4d8', pit: '#78716c', darts: '#a3e635', fire: '#fb923c', net: '#d6c7a1',
+  glyph: '#a78bfa', blade: '#e5e7eb', gas: '#86efac', alarm: '#facc15', collapse: '#a8a29e',
+};
+
+/**
+ * A trap: a pressure plate with a symbol for its type. The DM sees a ring
+ * for its state (red armed, orange sprung, green disarmed); players see an
+ * amber warning ring on traps they've found.
+ */
+export function drawTrap(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, trap: TrapLook | undefined, dm: boolean, ghost: boolean) {
+  const type = trap?.type ?? 'spikes', state = trap?.state ?? 'armed';
+  const col = state === 'disarmed' ? '#71717a' : TRAP_COLOR[type];
+  const sprung = state === 'triggered';
+  ctx.save();
+  if (ghost) ctx.globalAlpha = 0.6;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // The plate.
+  roundRect(ctx, cx - s * 0.36, cy - s * 0.36, s * 0.72, s * 0.72, s * 0.09);
+  const g = ctx.createLinearGradient(cx - s * 0.36, cy - s * 0.36, cx + s * 0.36, cy + s * 0.36);
+  g.addColorStop(0, 'rgba(70,64,58,0.85)'); g.addColorStop(1, 'rgba(24,22,20,0.9)');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = Math.max(1, s * 0.03); ctx.stroke();
+  // The symbol.
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.2, s * 0.05);
+  const r = s * 0.24;
+  ctx.beginPath();
+  switch (type) {
+    case 'spikes': {
+      const h = sprung ? r * 1.25 : r * 0.9;
+      for (const dx of [-0.6, 0, 0.6]) { ctx.moveTo(cx + dx * r - r * 0.28, cy + r * 0.6); ctx.lineTo(cx + dx * r, cy + r * 0.6 - h * 1.3); ctx.lineTo(cx + dx * r + r * 0.28, cy + r * 0.6); }
+      ctx.fill();
+      break;
+    }
+    case 'pit': {
+      const pg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.1);
+      pg.addColorStop(0, '#000'); pg.addColorStop(0.75, '#0c0a09'); pg.addColorStop(1, col);
+      ctx.arc(cx, cy, r * (sprung ? 1.15 : 0.95), 0, Math.PI * 2); ctx.fillStyle = pg; ctx.fill();
+      break;
+    }
+    case 'darts': {
+      for (const dy of [-0.5, 0, 0.5]) {
+        const y = cy + dy * r;
+        ctx.moveTo(cx - r * 0.9, y); ctx.lineTo(cx + r * 0.6, y);
+        ctx.moveTo(cx + r * 0.95, y); ctx.lineTo(cx + r * 0.55, y - r * 0.22); ctx.lineTo(cx + r * 0.55, y + r * 0.22); ctx.closePath();
+      }
+      ctx.stroke(); ctx.fill();
+      break;
+    }
+    case 'fire': {
+      ctx.moveTo(cx, cy - r * 1.15);
+      ctx.bezierCurveTo(cx + r * 0.9, cy - r * 0.2, cx + r * 0.8, cy + r * 0.9, cx, cy + r * 0.9);
+      ctx.bezierCurveTo(cx - r * 0.8, cy + r * 0.9, cx - r * 0.9, cy - r * 0.2, cx, cy - r * 1.15);
+      ctx.fill();
+      ctx.beginPath(); ctx.fillStyle = state === 'disarmed' ? '#a1a1aa' : '#fde68a';
+      ctx.ellipse(cx, cy + r * 0.35, r * 0.32, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'net': {
+      ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.save(); ctx.clip();
+      ctx.beginPath(); ctx.lineWidth = Math.max(1, s * 0.03);
+      for (let k = -2; k <= 2; k++) { ctx.moveTo(cx + k * r * 0.45 - r, cy - r); ctx.lineTo(cx + k * r * 0.45 + r, cy + r); ctx.moveTo(cx + k * r * 0.45 + r, cy - r); ctx.lineTo(cx + k * r * 0.45 - r, cy + r); }
+      ctx.stroke(); ctx.restore();
+      break;
+    }
+    case 'glyph': {
+      if (state !== 'disarmed') { ctx.shadowColor = col; ctx.shadowBlur = s * 0.25; }
+      ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + (k * 4 * Math.PI) / 5; const px = cx + Math.cos(a) * r * 0.85, py = cy + Math.sin(a) * r * 0.85; if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+      ctx.closePath(); ctx.stroke();
+      break;
+    }
+    case 'blade': {
+      ctx.arc(cx - r * 0.2, cy, r * 1.05, -Math.PI * 0.42, Math.PI * 0.42);
+      ctx.arc(cx - r * 0.55, cy, r * 0.85, Math.PI * 0.36, -Math.PI * 0.36, true);
+      ctx.closePath(); ctx.fill();
+      break;
+    }
+    case 'gas': {
+      for (const [dx, dy, rr] of [[-0.45, 0.15, 0.5], [0.1, -0.25, 0.6], [0.5, 0.2, 0.45]] as const) { ctx.moveTo(cx + dx * r + rr * r, cy + dy * r); ctx.arc(cx + dx * r, cy + dy * r, rr * r, 0, Math.PI * 2); }
+      ctx.globalAlpha *= 0.85; ctx.fill();
+      break;
+    }
+    case 'alarm': {
+      ctx.moveTo(cx - r * 0.8, cy + r * 0.55);
+      ctx.quadraticCurveTo(cx - r * 0.6, cy - r * 0.9, cx, cy - r * 0.95);
+      ctx.quadraticCurveTo(cx + r * 0.6, cy - r * 0.9, cx + r * 0.8, cy + r * 0.55);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy + r * 0.75, r * 0.2, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'collapse': {
+      for (const [dx, dy, k] of [[-0.5, 0.35, 0.45], [0.35, 0.3, 0.5], [-0.05, -0.4, 0.42]] as const) {
+        const x0 = cx + dx * r, y0 = cy + dy * r, q = k * r;
+        ctx.moveTo(x0 - q, y0); ctx.lineTo(x0 - q * 0.4, y0 - q * 0.8); ctx.lineTo(x0 + q * 0.7, y0 - q * 0.6); ctx.lineTo(x0 + q, y0 + q * 0.3); ctx.lineTo(x0, y0 + q * 0.7); ctx.closePath();
+      }
+      ctx.fill();
+      break;
+    }
+  }
+  ctx.shadowBlur = 0;
+  if (state === 'disarmed') {
+    // Struck through.
+    ctx.beginPath(); ctx.strokeStyle = '#22c55e'; ctx.lineWidth = Math.max(1.5, s * 0.05);
+    ctx.moveTo(cx - r, cy + r); ctx.lineTo(cx + r, cy - r); ctx.stroke();
+  }
+  // State ring.
+  ctx.beginPath();
+  roundRect(ctx, cx - s * 0.44, cy - s * 0.44, s * 0.88, s * 0.88, s * 0.12);
+  ctx.lineWidth = Math.max(1.5, s * 0.055);
+  if (dm) {
+    ctx.strokeStyle = state === 'armed' ? '#ef4444' : state === 'triggered' ? '#f59e0b' : '#22c55e';
+    if (state !== 'triggered') ctx.setLineDash([s * 0.1, s * 0.07]);
+    ctx.stroke();
+  } else if (state !== 'disarmed') {
+    ctx.strokeStyle = '#fbbf24'; ctx.stroke();
+  }
+  ctx.restore();
 }

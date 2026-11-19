@@ -2,6 +2,7 @@
 // not revealed is stripped here, so it never leaves the server.
 import { DIRS8, footprint, inBounds } from './grid';
 import { findMap } from './ops';
+import type { TrapInfo } from './traps';
 import type {
   AreaTemplate, Drawing, Game, Label, MapData, MapSettings, ObjectKind,
   ScreenState, Terrain, Theme, Token, TokenKind,
@@ -27,7 +28,8 @@ export interface PlayerMap {
   terrain: Terrain[];
   fog: number[];
   doors: { id: string; x: number; y: number; state: 'open' | 'closed' }[];
-  objects: { id: string; x: number; y: number; kind: ObjectKind }[];
+  /** Revealed traps carry only their type and state, never DCs or notes. */
+  objects: { id: string; x: number; y: number; kind: ObjectKind; trap?: Pick<TrapInfo, 'type' | 'state'> }[];
   tokens: PlayerToken[];
   templates: AreaTemplate[];
   drawings: Drawing[];
@@ -114,7 +116,7 @@ export function playerMap(map: MapData): PlayerMap {
       .map((d) => ({ id: d.id, x: d.x, y: d.y, state: d.state as 'open' | 'closed' })),
     objects: map.objects
       .filter((o) => !o.hidden && seen[o.y * W + o.x] === 1)
-      .map((o) => ({ id: o.id, x: o.x, y: o.y, kind: o.kind })),
+      .map((o) => ({ id: o.id, x: o.x, y: o.y, kind: o.kind, ...(o.trap ? { trap: { type: o.trap.type, state: o.trap.state } } : {}) })),
     tokens: tokens.map(tokenForPlayers),
     templates: map.templates.filter((t) => !t.hidden).map((t) => ({ ...t })),
     drawings: map.drawings.filter((d) => !d.hidden).map((d) => ({ ...d })),

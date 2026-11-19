@@ -293,3 +293,36 @@ describe('turn order entries typed in by the DM', () => {
     expect(m.templates[1].effect).toBeUndefined();
   });
 });
+
+describe('traps', () => {
+  it('keeps trap details for the DM and shows players only revealed traps, without the details', () => {
+    const g = game(); const m = g.maps[0];
+    for (let i = 0; i < m.fog.length; i++) m.fog[i] = 1;
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'objects', item: { id: 't1', x: 2, y: 2, kind: 'trap', trap: { type: 'darts', state: 'armed', dc: 15, damage: 'SECRET-DAMAGE', note: 'SECRET-NOTE-TRAP' } } });
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'objects', item: { id: 't2', x: 3, y: 2, kind: 'trap', hidden: true, trap: { type: 'pit', state: 'armed' } } });
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'objects', item: { id: 't3', x: 4, y: 2, kind: 'trap', trap: { type: 'banana', state: 'nope' } as never } });
+    expect(m.objects[0].trap).toEqual({ type: 'darts', state: 'armed', dc: 15, damage: 'SECRET-DAMAGE', note: 'SECRET-NOTE-TRAP' });
+    expect(m.objects[2].trap).toEqual({ type: 'spikes', state: 'armed' });
+    const v = playerView(g).map!;
+    expect(v.objects.map((o) => o.id)).toEqual(['t1', 't3']);
+    expect(v.objects[0].trap).toEqual({ type: 'darts', state: 'armed' });
+    const raw = JSON.stringify(playerView(g));
+    expect(raw).not.toContain('SECRET-DAMAGE');
+    expect(raw).not.toContain('SECRET-NOTE-TRAP');
+  });
+
+  it('spots armed traps a token crosses or lands on, but not where it started', async () => {
+    const { trapsCrossed } = await import('../../shared/traps');
+    const map = { objects: [
+      { id: 'a', x: 3, y: 0, kind: 'trap' as const, trap: { type: 'spikes' as const, state: 'armed' as const } },
+      { id: 'b', x: 6, y: 0, kind: 'trap' as const, trap: { type: 'pit' as const, state: 'disarmed' as const } },
+      { id: 'c', x: 0, y: 0, kind: 'trap' as const, trap: { type: 'net' as const, state: 'armed' as const } },
+      { id: 'd', x: 8, y: 0, kind: 'trap' as const, trap: { type: 'gas' as const, state: 'triggered' as const } },
+    ] };
+    expect(trapsCrossed(map, { size: 1 }, { x: 0, y: 0 }, { x: 9, y: 0 }).map((o) => o.id)).toEqual(['a']);
+    expect(trapsCrossed(map, { size: 1 }, { x: 0, y: 1 }, { x: 5, y: 1 })).toEqual([]);
+    // A large creature's footprint sweeps the row next to it too.
+    expect(trapsCrossed(map, { size: 2 }, { x: 0, y: 1 }, { x: 5, y: 1 })).toEqual([]);
+    expect(trapsCrossed(map, { size: 2 }, { x: 1, y: -1 }, { x: 5, y: -1 }).map((o) => o.id)).toEqual(['a']);
+  });
+});

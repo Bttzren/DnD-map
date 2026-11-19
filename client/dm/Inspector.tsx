@@ -1,9 +1,10 @@
 import { useState } from 'preact/hooks';
 import { findMap } from '../../shared/ops';
-import { CONDITIONS, HP_VISIBILITY, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, TOKEN_KINDS, uid, type AreaTemplate, type HpVisibility, type Token } from '../../shared/types';
+import { CONDITIONS, HP_VISIBILITY, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, TOKEN_KINDS, uid, type AreaTemplate, type HpVisibility, type MapObject, type Token } from '../../shared/types';
 import { footprint } from '../../shared/grid';
 import { templateCells } from '../../shared/templates';
 import { EFFECTS } from '../render/spells';
+import { TRAPS, TRAP_TYPES, trapSummary, type TrapInfo } from '../../shared/traps';
 import { hpLabel } from '../../shared/view';
 import { conditionColor } from '../render/mapView';
 import { Avatar, Icon, NumField, Seg, Switch, confirmDialog, toast, useStore } from '../ui';
@@ -180,7 +181,8 @@ function OtherCard({ ctl }: { ctl: DmCtl }) {
   const map = ctl.map!;
   const item = (map[other.coll] as { id: string; hidden?: boolean }[]).find((x) => x.id === other.id);
   if (!item || !findMap(ctl.state.game!, map.id)) return null;
-  const name = other.coll === 'templates' ? 'Spell area' : other.coll === 'drawings' ? 'Drawing' : 'Label';
+  const trapObj = other.coll === 'objects' ? (item as unknown as MapObject) : null;
+  const name = other.coll === 'templates' ? 'Spell area' : other.coll === 'drawings' ? 'Drawing' : trapObj?.trap ? TRAPS[trapObj.trap.type].label : other.coll === 'objects' ? 'Object' : 'Label';
   const put = (patch: Record<string, unknown>) => ctl.dispatch({ t: 'item.put', mapId: map.id, coll: other.coll, item: { ...item, ...patch } } as never);
   return (
     <div class="card inspector" style={{ width: '260px' }}>
@@ -219,6 +221,36 @@ function OtherCard({ ctl }: { ctl: DmCtl }) {
               {caught.length > 0 && (
                 <button class="btn sm" onClick={() => ctl.set({ other: null, selected: caught.map((tk) => tk.id) })}>Select them</button>
               )}
+            </>
+          );
+        })()}
+        {trapObj?.trap && (() => {
+          const t = trapObj.trap;
+          const info = TRAPS[t.type];
+          const setTrap = (patch: Partial<TrapInfo>) => put({ trap: { ...t, ...patch } });
+          return (
+            <>
+              <select class="input sm" value={t.type} onChange={(e) => setTrap({ type: e.currentTarget.value as TrapInfo['type'] })} aria-label="Trap type">
+                {TRAP_TYPES.map((k) => <option key={k} value={k}>{TRAPS[k].label}</option>)}
+              </select>
+              <span class="hint" style={{ margin: 0 }}>{info.hint}</span>
+              <Seg full value={t.state} onChange={(v) => setTrap({ state: v })} options={[{ v: 'armed', label: 'Armed' }, { v: 'triggered', label: 'Sprung' }, { v: 'disarmed', label: 'Disarmed' }]} />
+              <div class="row">
+                <span class="small muted">DC</span>
+                <NumField class="init-num" value={t.dc ?? info.dc} onCommit={(v) => setTrap({ dc: Math.max(1, Math.min(40, v ?? info.dc)) })} />
+                <span class="small muted">{info.save}</span>
+              </div>
+              <input class="input sm" value={t.damage ?? ''} placeholder={info.damage} maxLength={60} onChange={(e) => setTrap({ damage: e.currentTarget.value })} aria-label="Damage or effect" title="Damage or effect" />
+              <textarea class="input sm" rows={2} value={t.note ?? ''} placeholder="Notes: how to spot or disarm it (only you see this)" maxLength={300} onChange={(e) => setTrap({ note: e.currentTarget.value })} />
+              {t.state === 'armed' && (
+                <button class="btn sm danger" onClick={() => {
+                  // Sprung: show it to everyone and point it out.
+                  put({ hidden: false, trap: { ...t, state: 'triggered' } });
+                  ctl.ping(trapObj.x, trapObj.y, false);
+                  toast(`${info.label} sprung: ${trapSummary(t)}`, 'error', 5000);
+                }}><Icon name="trap" size={14} /> Spring it (show players)</button>
+              )}
+              {t.state !== 'armed' && <button class="btn sm" onClick={() => setTrap({ state: 'armed' })}>Re-arm</button>}
             </>
           );
         })()}

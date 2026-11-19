@@ -1,3 +1,4 @@
+import type { TrapInfo } from '../../shared/traps';
 import type { AreaTemplate, DoorState, Drawing, Label, MapSettings, ObjectKind, Room, Terrain, Theme, TokenKind } from '../../shared/types';
 
 /** What the renderer needs, whether it came from the DM's full map or a player's filtered view. */
@@ -32,7 +33,7 @@ export interface RenderMap {
   /** DM only: fog to tint. Players get fog baked into terrain. */
   fog: number[] | null;
   doors: { id: string; x: number; y: number; state: DoorState }[];
-  objects: { id: string; x: number; y: number; kind: ObjectKind; hidden?: boolean }[];
+  objects: { id: string; x: number; y: number; kind: ObjectKind; hidden?: boolean; trap?: Pick<TrapInfo, 'type' | 'state'> & Partial<TrapInfo> }[];
   tokens: RenderToken[];
   templates: AreaTemplate[];
   drawings: Drawing[];

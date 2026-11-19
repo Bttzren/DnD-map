@@ -93,14 +93,15 @@ tokens over. Or describe what you want to the AI ("a flooded crypt with three
 burial chambers and a secret vault behind the altar"). You can also start
 blank and paint.
 
-**Fix it up.** The tool rail on the left:
+**Fix it up.** The tool rail on the left (the palette button in the top bar switches light or dark mode and the colour scheme, just for your screen):
 
 | Key | Tool | |
 |---|---|---|
 | `V` | Select & move | Drag tokens (shift-click for groups), click doors to open/close, arrows nudge |
 | `B` | Paint terrain | Stone, wooden and checkered floors, dirt, grass, sand, snow, mud, rubble, water, lava, pits, walls and trees. Walls appear around new floor automatically. Alt-click picks a terrain |
 | `D` | Doors | Click to add; click again to cycle closed, open, secret, gone |
-| `O` | Objects | Chests, tables, pillars, altars, traps (can be hidden) and more |
+| `O` | Objects | Chests, tables, pillars, altars and more (can be hidden) |
+| `X` | Traps | Spike plates, pits, poison darts, fire jets, nets, glyphs, blades, gas, alarms, collapsing ceilings. Each has a DC, damage and notes only you see, and is armed, sprung or disarmed. Moving a token onto or across an armed trap warns you with its details; **Spring it** shows it to the players |
 | `F` | Fog of war | Reveal or hide a whole room in one click, or brush it |
 | `R` | Measure | Drag to measure; starting on a token measures from it |
 | `T` | Spell areas | Pick a spell (Fireball, Cone of Cold, Lightning Bolt and more) or any shape and size. Animated fire, frost, lightning, poison, darkness and more, over the squares they cover. Drag a placed area's centre to move it; click it to resize, rotate, restyle and see who's caught |
@@ -159,7 +160,7 @@ sent, and saved with the game.
 
 The server builds each player's view and strips anything not revealed before
 it leaves the server, so it can't be found by inspecting the page:
-unrevealed areas, hidden tokens and traps, secret doors (they look like
+unrevealed areas, hidden tokens and traps (and every trap's DC, damage and notes), secret doors (they look like
 wall), room names, your notes, and hidden drawings and labels. Monsters
 standing in fog aren't sent at all.
 

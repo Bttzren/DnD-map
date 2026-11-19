@@ -9,7 +9,8 @@
 import { cellNoise } from '../../shared/rng';
 import type { DoorState, ObjectKind, Terrain } from '../../shared/types';
 import { PALETTES, PLAYER_VOID } from './palette';
-import { drawObject, roundRect } from './staticLayer';
+import { drawObject, drawTrap, roundRect } from './staticLayer';
+import type { TrapInfo } from '../../shared/traps';
 import { makeCanvas, pattern, THEME_TEXTURES } from './textures';
 import type { RenderMap } from './types';
 
@@ -314,7 +315,7 @@ export function drawStaticTextured(map: StaticMap, canvas: AnyCanvas, px: number
   // 6. Trees, doors, objects.
   drawTrees(ctx, map, px, T);
   for (const d of map.doors) drawDoor(ctx, d.x, d.y, d.state, px, T, dm, 'floor-tavern');
-  for (const o of map.objects) drawThing(ctx, o.kind, o.x, o.y, px, !!o.hidden && dm);
+  for (const o of map.objects) drawThing(ctx, o.kind, o.x, o.y, px, !!o.hidden && dm, o.trap, dm);
 
   // 7. Warm light from fires, candles and lava, then the theme's colour grade.
   ctx.save();
@@ -484,10 +485,11 @@ function drawDoor(ctx: Ctx, x: number, y: number, state: DoorState, px: number, 
 }
 
 /** Objects with textured wood and stone; the rest keep their drawn look. */
-function drawThing(ctx: Ctx, kind: ObjectKind, x: number, y: number, px: number, ghost: boolean) {
+function drawThing(ctx: Ctx, kind: ObjectKind, x: number, y: number, px: number, ghost: boolean, trap?: Pick<TrapInfo, 'type' | 'state'>, dm = true) {
   const cx = (x + 0.5) * px, cy = (y + 0.5) * px, s = px;
   const wood = pattern(ctx, 'floor-tavern', px, 0.3);
   const stone = pattern(ctx, 'floor-crypt', px, 0.6);
+  if (kind === 'trap') return drawTrap(ctx, (x + 0.5) * px, (y + 0.5) * px, px, trap, dm, ghost);
   if (!wood || !stone) return drawObject(ctx, kind, x, y, px, ghost);
   ctx.save();
   if (ghost) ctx.globalAlpha = 0.55;

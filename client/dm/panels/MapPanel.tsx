@@ -5,11 +5,13 @@ import { validateMap } from '../../../shared/ops';
 import { AMBIENCES, THEMES, uid, type Ambience, type MapData } from '../../../shared/types';
 import { Icon, Seg, Switch, confirmDialog, promptDialog, toast, useStore } from '../../ui';
 import type { DmCtl } from '../state';
+import type { MapView } from '../../render/mapView';
+import { TRAPS } from '../../../shared/traps';
 import { freeSpots } from '../tools';
 
 const AMBIENCE_LABEL: Record<Ambience, string> = { none: 'Clear', rain: '🌧️ Rain', snow: '❄️ Snow', fog: '🌫️ Mist', embers: '🔥 Embers', dark: '🌑 Dark' };
 
-export function MapPanel({ ctl }: { ctl: DmCtl }) {
+export function MapPanel({ ctl, view }: { ctl: DmCtl; view?: MapView | null }) {
   useStore(ctl, (s) => s.ver);
   const mapId = useStore(ctl, (s) => s.mapId);
   const showRooms = useStore(ctl, (s) => s.showRooms);
@@ -105,6 +107,28 @@ export function MapPanel({ ctl }: { ctl: DmCtl }) {
 
       {map && (
         <>
+          {map.objects.some((o) => o.kind === 'trap') && (() => {
+            const traps = map.objects.filter((o) => o.kind === 'trap');
+            const armed = traps.filter((o) => o.trap?.state === 'armed').length;
+            return (
+              <div class="section">
+                <h3>Traps ({armed} armed{traps.length > armed ? ` of ${traps.length}` : ''})</h3>
+                <div class="list">
+                  {traps.map((o) => {
+                    const t = o.trap ?? { type: 'spikes' as const, state: 'armed' as const };
+                    return (
+                      <div key={o.id} class={`item${t.state !== 'armed' ? ' dim' : ''}`} onClick={() => { ctl.set({ other: { coll: 'objects', id: o.id }, selected: [] }); view?.centerOn(o.x + 0.5, o.y + 0.5, view.cam.z); }}>
+                        <span class={`trap-dot ${t.state}`} />
+                        <span class="name">{TRAPS[t.type].label}{o.hidden ? <span class="faint"> · hidden</span> : <span class="faint"> · players see it</span>}</span>
+                        <span class="small muted">{t.state === 'triggered' ? 'sprung' : t.state}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <span class="hint">Set traps with the trap tool (<span class="kbd">X</span>). You're warned when a token steps on an armed one.</span>
+              </div>
+            );
+          })()}
           <div class="section">
             <h3>Fog of war</h3>
             <div class="row">

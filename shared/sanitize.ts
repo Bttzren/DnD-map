@@ -1,6 +1,7 @@
 // Everything that arrives over the wire is untrusted, even from the DM:
 // clean it into the exact shapes the rest of the code relies on.
 import type { Coll, CollTypes } from './ops';
+import { TRAP_STATES, TRAP_TYPES, type TrapInfo } from './traps';
 import {
   AMBIENCES, DISTANCE_RULES, DOOR_STATES, HP_VISIBILITY, OBJECT_KINDS, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, THEMES, TOKEN_KINDS,
   MAX_IMAGES, defaultScreen, defaultSettings, isImageData, isImageId,
@@ -62,6 +63,14 @@ function object(r: Raw, m: Dims): MapObject | null {
   if (!oid || x < 0 || y < 0 || x >= m.width || y >= m.height || !(OBJECT_KINDS as readonly string[]).includes(r.kind as string)) return null;
   const o: MapObject = { id: oid, x, y, kind: r.kind as MapObject['kind'] };
   if (bool(r.hidden)) o.hidden = true;
+  if (o.kind === 'trap') {
+    const t = obj(r.trap);
+    const trap: TrapInfo = { type: oneOf(t.type, TRAP_TYPES, 'spikes'), state: oneOf(t.state, TRAP_STATES, 'armed') };
+    if (typeof t.dc === 'number') trap.dc = int(t.dc, 13, 1, 40);
+    const damage = str(t.damage, 60).trim(); if (damage) trap.damage = damage;
+    const note = str(t.note, 300).trim(); if (note) trap.note = note;
+    o.trap = trap;
+  }
   return o;
 }
 

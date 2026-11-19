@@ -1,4 +1,5 @@
 // Core data model shared by server and client.
+import type { TrapInfo } from './traps';
 // Coordinates are in grid cells; one cell is 5 ft.
 
 export const TERRAINS = [
@@ -49,7 +50,11 @@ export interface Point { x: number; y: number }
 
 export interface Door { id: string; x: number; y: number; state: DoorState }
 
-export interface MapObject { id: string; x: number; y: number; kind: ObjectKind; hidden?: boolean }
+export interface MapObject {
+  id: string; x: number; y: number; kind: ObjectKind; hidden?: boolean;
+  /** Only for kind 'trap'. */
+  trap?: TrapInfo;
+}
 
 export interface Room {
   id: string;
