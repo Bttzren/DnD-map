@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { isLocalPage } from '../../origin';
 import { THEME_LABEL } from '../../../shared/build';
 import { generateMap, type Density } from '../../../shared/generate';
 import { idx } from '../../../shared/grid';
@@ -31,6 +32,16 @@ const randomSeed = () => Math.random().toString(36).slice(2, 8);
 export function GeneratePanel({ ctl }: { ctl: DmCtl }) {
   const aiEnabled = useStore(ctl, (s) => s.aiEnabled);
   const aiBusy = useStore(ctl, (s) => s.aiBusy);
+  const aiInfo = useStore(ctl, (s) => s.ai);
+  const progress = useStore(ctl, (s) => s.aiProgress);
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!aiBusy) return;
+    const t0 = Date.now(); setElapsed(0);
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [aiBusy]);
+  const local = aiInfo?.kind === 'ollama';
   const hasMap = useStore(ctl, (s) => !!s.mapId && !!s.game?.maps.length);
   const [theme, setTheme] = useState<Theme>(pref.get('gen.theme', 'dungeon'));
   const [size, setSize] = useState<string>(pref.get('gen.size', 'M'));
@@ -118,7 +129,35 @@ export function GeneratePanel({ ctl }: { ctl: DmCtl }) {
       </div>
 
       <div class="section">
-        <h3>Describe it to the AI</h3>
+        <div class="row between">
+          <h3>Describe it to the AI</h3>
+          {aiInfo && <span class="badge" style={{ whiteSpace: 'nowrap' }} title={local ? `${aiInfo.model}, free on this computer through Ollama` : `${aiInfo.model || 'Claude'}, through the Anthropic API`}>{local ? 'Local AI' : 'Claude'}</span>}
+        </div>
+        {local && !aiInfo!.ready && (
+          <div class="ai-setup">
+            {!aiInfo!.reachable ? (
+              isLocalPage() ? (
+                <>
+                  <b>Free AI maps on this computer</b>
+                  <span class="small muted">Install <a href="https://ollama.com/download" target="_blank" rel="noreferrer">Ollama</a> (free), open it, then press Check again. Nothing leaves your computer.</span>
+                  <button class="btn sm" onClick={() => ctl.checkAi()}>Check again</button>
+                </>
+              ) : <span class="small muted">AI is off on this server.</span>
+            ) : progress && !progress.error ? (
+              <>
+                <b>Downloading {aiInfo!.model}…</b>
+                <div class="hpbar"><div style={{ width: `${progress.total ? (progress.completed / progress.total) * 100 : 3}%`, background: 'var(--gold)' }} /></div>
+                <span class="small muted">{progress.total ? `${(progress.completed / 1e9).toFixed(2)} of ${(progress.total / 1e9).toFixed(2)} GB` : progress.status}. You can keep using the app.</span>
+              </>
+            ) : (
+              <>
+                <b>Ollama is running</b>
+                <span class="small muted">Download the map model ({aiInfo!.model}, a few GB, once). After that, AI maps are free and work offline.</span>
+                <button class="btn sm primary" onClick={() => ctl.pullAi()}><Icon name="download" size={15} /> Download the AI model</button>
+              </>
+            )}
+          </div>
+        )}
         <textarea class="input" rows={4} maxLength={1000} value={prompt} placeholder={EXAMPLES[0]} onInput={(e) => setPrompt(e.currentTarget.value)} disabled={!aiEnabled} />
         <div class="row wrap">
           {EXAMPLES.slice(1, 4).map((ex) => (
@@ -126,9 +165,9 @@ export function GeneratePanel({ ctl }: { ctl: DmCtl }) {
           ))}
         </div>
         <button class="btn primary block" style={{ height: '40px' }} disabled={!aiEnabled || aiBusy} onClick={ai}>
-          {aiBusy ? <><span class="spinner" /> Drawing up plans… (up to a minute)</> : <><Icon name="sparkle" /> Generate with AI</>}
+          {aiBusy ? <><span class="spinner" /> Drawing up plans… {elapsed}s{local ? ' (a local model can take a few minutes)' : ''}</> : <><Icon name="sparkle" /> Generate with AI</>}
         </button>
-        {!aiEnabled && <span class="hint">AI is off on this server. Whoever hosts it can turn it on by setting <code>ANTHROPIC_API_KEY</code>. The quick generator above is always free.</span>}
+        {!aiEnabled && !local && <span class="hint">AI is off on this server. Whoever hosts it can turn it on by setting <code>ANTHROPIC_API_KEY</code>. The quick generator above is always free.</span>}
       </div>
 
       <div class="section">

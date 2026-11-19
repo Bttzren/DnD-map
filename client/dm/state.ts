@@ -1,7 +1,7 @@
 // The DM's client state: the full game, what's selected, tool settings,
 // undo history, and the connection. Edits apply locally first, then sync.
 import { applyOp, findMap, type Coll, type Op } from '../../shared/ops';
-import type { AiRequest, ServerMsg, Watcher } from '../../shared/protocol';
+import type { AiRequest, AiStatus, ServerMsg, Watcher } from '../../shared/protocol';
 import {
   defaultScreen, uid,
   type DoorState, type Game, type MapData, type ObjectKind, type TemplateEffect, type TemplateShape, type Terrain, type Theme,
@@ -43,6 +43,9 @@ export interface DmState {
   status: Status;
   fatal: string | null;
   aiEnabled: boolean;
+  /** Which AI the server has, and the local model's download progress. */
+  ai: AiStatus | null;
+  aiProgress: { status: string; total: number; completed: number; error?: string } | null;
   aiBusy: boolean;
   game: Game | null;
   mapId: string | null;
@@ -94,7 +97,7 @@ export class DmCtl extends Store<DmState> {
       history.replaceState(null, '', location.pathname);
     }
     super({
-      code, secret, status: 'connecting', fatal: secret ? null : 'no-secret', aiEnabled: false, aiBusy: false,
+      code, secret, status: 'connecting', fatal: secret ? null : 'no-secret', aiEnabled: false, ai: null, aiProgress: null, aiBusy: false,
       game: null, mapId: null, players: [], tool: 'select', opts: { ...DEFAULT_OPTS, ...pref.get<Partial<ToolOpts>>('opts', {}) },
       selected: [], other: null, tab: 'generate', panelOpen: pref.get('panelOpen', true), showRooms: pref.get('showRooms', true),
       fogTint: true, share: false, ver: 0, staticVer: 0, fogVer: 0, canUndo: false, canRedo: false, pings: [],
@@ -145,6 +148,13 @@ export class DmCtl extends Store<DmState> {
         break;
       }
       case 'ping': this.addPing(m.x, m.y, m.color, m.by); break;
+      case 'ai.info': this.set({ ai: m.ai, aiEnabled: !!m.ai?.ready }); break;
+      case 'ai.progress':
+        if (m.done) {
+          this.set({ aiProgress: m.error ? { ...m } : null });
+          if (m.error) toast(`Download failed: ${m.error}`, 'error', 6000); else toast('Local AI model downloaded. AI maps are ready.', 'ok', 4000);
+        } else this.set({ aiProgress: { status: m.status, total: m.total, completed: m.completed } });
+        break;
       case 'ai.result': this.aiWaiters.get(m.reqId)?.(m.map); this.aiWaiters.delete(m.reqId); break;
       case 'ai.error': toast(m.message, 'error', 5000); this.aiWaiters.get(m.reqId)?.(null); this.aiWaiters.delete(m.reqId); break;
       case 'error':
@@ -290,11 +300,18 @@ export class DmCtl extends Store<DmState> {
     }, 120);
   }
 
+  /** Ask the server which AI it has (e.g. after starting Ollama). */
+  checkAi() { this.conn.send({ type: 'ai.info' }, false); }
+  /** Download the local AI model through Ollama. */
+  pullAi() { this.set({ aiProgress: { status: 'starting', total: 0, completed: 0 } }); this.conn.send({ type: 'ai.pull' }, false); }
+
   generateAi(req: Omit<AiRequest, 'reqId'>): Promise<MapData | null> {
     const reqId = uid('ai');
     this.set({ aiBusy: true });
+    // A model on a laptop can take several minutes.
+    const wait = this.state.ai?.kind === 'ollama' ? 9 * 60_000 : 150_000;
     return new Promise((res) => {
-      const timer = setTimeout(() => { this.aiWaiters.delete(reqId); this.set({ aiBusy: false }); toast('The AI took too long. Try again.', 'error'); res(null); }, 150_000);
+      const timer = setTimeout(() => { this.aiWaiters.delete(reqId); this.set({ aiBusy: false }); toast('The AI took too long. Try again.', 'error'); res(null); }, wait);
       this.aiWaiters.set(reqId, (m) => { clearTimeout(timer); this.set({ aiBusy: false }); res(m); });
       this.conn.send({ type: 'ai', reqId, ...req }, false);
       if (this.state.status !== 'open') { clearTimeout(timer); this.aiWaiters.delete(reqId); this.set({ aiBusy: false }); toast('Not connected to the server', 'error'); res(null); }

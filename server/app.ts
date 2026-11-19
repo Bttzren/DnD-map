@@ -58,7 +58,7 @@ export async function createApp(o: AppOptions) {
         // Opened on this computer itself: tell the page how phones on the same wifi can reach it,
         // so the invite QR doesn't point at "localhost". Not shown to anyone browsing from outside.
         const lanUrls = isLocalHost(req.headers.host) ? lanAddresses().map((ip) => `http://${ip}:${req.socket.localPort}`) : [];
-        return json(res, 200, { aiEnabled: hub.aiEnabled, passwordRequired: !!o.hostPassword, lanUrls });
+        return json(res, 200, { aiEnabled: !!(await hub.aiInfo())?.ready, passwordRequired: !!o.hostPassword, lanUrls });
       }
       if (url.pathname === '/api/health') return json(res, 200, { ok: true });
       if (url.pathname === '/api/games' && req.method === 'POST') {

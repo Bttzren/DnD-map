@@ -11,8 +11,22 @@ import { playerView, visibleTokens } from '../shared/view';
 import { hashSecret, sameHash, type Secrets } from './secrets';
 import type { Store } from './store';
 
+export interface AiInfo {
+  kind: 'claude' | 'ollama';
+  model: string;
+  /** Ready to make maps right now. */
+  ready: boolean;
+  /** Ollama only: is it running, does it have the model, is it downloading it. */
+  reachable?: boolean;
+  hasModel?: boolean;
+  pulling?: boolean;
+}
+export interface PullProgress { status: string; total: number; completed: number }
+
 export interface AiProvider {
   generate(req: AiRequest): Promise<unknown>;
+  info?(fresh?: boolean): Promise<AiInfo>;
+  pull?(onProgress: (p: PullProgress) => void): Promise<void>;
 }
 
 interface Client {
@@ -64,6 +78,7 @@ export class Hub {
   private heartbeat: NodeJS.Timeout;
 
   constructor(private o: HubOptions) {
+    if (o.ai) void this.aiInfo().catch(() => {});
     this.heartbeat = setInterval(() => {
       for (const c of this.clients) {
         if (!c.alive) { c.ws.terminate(); continue; }
@@ -73,7 +88,38 @@ export class Hub {
     }, 25_000);
   }
 
-  get aiEnabled() { return !!this.o.ai; }
+
+  /** What AI this server has and whether it can make maps now (null: none). */
+  async aiInfo(fresh = false): Promise<AiInfo | null> {
+    const ai = this.o.ai;
+    if (!ai) return null;
+    const info: AiInfo = ai.info ? await ai.info(fresh) : { kind: 'claude', model: '', ready: true };
+    this.aiReady = info.ready;
+    return info;
+  }
+  /** Last known readiness, for replies that can't wait. */
+  private aiReady = false;
+
+  private toAllDms(m: ServerMsg) {
+    const out = JSON.stringify(m);
+    for (const r of this.rooms.values()) for (const d of r.dms) send(d.ws, out);
+  }
+
+  /** Download the local AI model, showing progress on every DM screen. */
+  private pullModel() {
+    const ai = this.o.ai;
+    if (!ai?.pull) return;
+    let last = 0;
+    void ai.pull((p) => {
+      const now = Date.now();
+      if (now - last < 250 && p.completed < p.total) return;
+      last = now;
+      this.toAllDms({ type: 'ai.progress', ...p });
+    }).then(
+      () => this.toAllDms({ type: 'ai.progress', status: 'success', total: 1, completed: 1, done: true }),
+      (e: Error) => this.toAllDms({ type: 'ai.progress', status: 'error', total: 0, completed: 0, done: true, error: e.message }),
+    ).finally(async () => this.toAllDms({ type: 'ai.info', ai: await this.aiInfo(true) }));
+  }
 
   async createRoom(code: string, secret: string): Promise<void> {
     const game: Game = { code, maps: [], liveMapId: null, screen: defaultScreen(), createdAt: Date.now(), updatedAt: Date.now() };
@@ -189,6 +235,11 @@ export class Hub {
         break;
       }
       case 'ai': return this.ai(c, room, msg);
+      case 'ai.info': return send(c.ws, { type: 'ai.info', ai: await this.aiInfo(true) });
+      case 'ai.pull': {
+        this.pullModel();
+        return send(c.ws, { type: 'ai.info', ai: await this.aiInfo(true) });
+      }
     }
   }
 
@@ -307,7 +358,9 @@ export class Hub {
   private attach(c: Client, room: Room) {
     if (room.unloadTimer) { clearTimeout(room.unloadTimer); room.unloadTimer = null; }
     this.waiting.get(room.code)?.delete(c);
-    send(c.ws, { type: 'joined', role: c.role!, code: room.code, aiEnabled: this.aiEnabled });
+    send(c.ws, { type: 'joined', role: c.role!, code: room.code, aiEnabled: this.aiReady });
+    // The local AI's state takes a moment to check; DMs get it right after.
+    if (c.role === 'dm' && this.o.ai) void this.aiInfo().then((ai) => send(c.ws, { type: 'ai.info', ai }));
     if (c.role === 'dm') {
       room.dms.add(c);
       send(c.ws, { type: 'state', game: room.game });
@@ -358,6 +411,12 @@ export class Hub {
   private async ai(c: Client, room: Room, req: AiRequest) {
     const reqId = String(req.reqId ?? '').slice(0, 40);
     if (!this.o.ai) return send(c.ws, { type: 'ai.error', reqId, message: 'AI is not set up on this server. Use the built-in generator, or add an ANTHROPIC_API_KEY.' });
+    const info = await this.aiInfo();
+    if (info && !info.ready) {
+      const why = info.kind === 'ollama' && !info.reachable ? 'Ollama isn’t running on this computer. Open it and try again.'
+        : info.pulling ? 'The local AI model is still downloading.' : 'The local AI model isn’t downloaded yet.';
+      return send(c.ws, { type: 'ai.error', reqId, message: why });
+    }
     const now = Date.now();
     room.aiTimes = room.aiTimes.filter((t) => now - t < 60_000);
     if (room.aiTimes.length >= (this.o.aiPerMinute ?? 5)) {
@@ -374,7 +433,9 @@ export class Hub {
       send(c.ws, { type: 'ai.result', reqId, map });
     } catch (err) {
       console.error('[ai] generation failed:', (err as Error).message);
-      send(c.ws, { type: 'ai.error', reqId, message: 'The AI could not make that map. Try again, or rephrase.' });
+      // Local AI errors are written for the DM (not running, too slow...); Claude's are not.
+      const local = info?.kind === 'ollama' && /^(Ollama|The local AI)/.test((err as Error).message);
+      send(c.ws, { type: 'ai.error', reqId, message: local ? (err as Error).message : 'The AI could not make that map. Try again, or rephrase.' });
     }
   }
 

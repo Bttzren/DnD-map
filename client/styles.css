@@ -316,3 +316,6 @@ textarea.input { height: auto; min-height: 76px; padding: 8px 10px; resize: vert
 .is-player .toasts { bottom: calc(var(--pl-bottom, 120px) + 12px); }
 .pl-nothing { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; padding: 24px; text-align: center; }
 .pl-nothing span { padding: 10px 16px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+
+.ai-setup { display: grid; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px dashed rgba(224,184,74,0.4); background: rgba(224,184,74,0.06); margin-bottom: 8px; }
+.ai-setup a { color: var(--gold-2, #f3d36b); }

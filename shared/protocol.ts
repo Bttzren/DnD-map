@@ -4,6 +4,9 @@ import type { PlayerMap } from './view';
 
 export type Role = 'dm' | 'player';
 
+/** Which AI the server has (Claude, or a local Ollama model) and whether it's ready. */
+export interface AiStatus { kind: 'claude' | 'ollama'; model: string; ready: boolean; reachable?: boolean; hasModel?: boolean; pulling?: boolean }
+
 export interface AiRequest {
   reqId: string;
   prompt: string;
@@ -22,6 +25,9 @@ export type ClientMsg =
   | { type: 'view'; cx: number; cy: number; zoom: number }
   | ({ type: 'ai' } & AiRequest)
   | { type: 'hb' }
+  /** DM: ask which AI is available; ask to download the local model. */
+  | { type: 'ai.info' }
+  | { type: 'ai.pull' }
   /** A player sets (or clears, with id null) the picture of a party token they can see. */
   | { type: 'icon'; tokenId: string; id: string | null; data?: string };
 
@@ -34,6 +40,8 @@ export interface Watcher { id: string; name: string }
 
 export type ServerMsg =
   | { type: 'joined'; role: Role; code: string; aiEnabled: boolean }
+  | { type: 'ai.info'; ai: AiStatus | null }
+  | { type: 'ai.progress'; status: string; total: number; completed: number; done?: boolean; error?: string }
   | { type: 'state'; game: Game }
   | { type: 'op'; op: Op }
   | { type: 'pview'; screen?: ScreenState; static?: PlayerStatic | null; dynamic?: PlayerDynamic | null }

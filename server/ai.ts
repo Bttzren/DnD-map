@@ -117,6 +117,7 @@ export function makeAi(o: { apiKey?: string | null; model?: string | null; clien
   const client = o.client ?? (new Anthropic({ apiKey: o.apiKey! }) as unknown as MessagesClient);
   const model = o.model || DEFAULT_MODEL;
   return {
+    info: async () => ({ kind: 'claude', model, ready: true }),
     async generate(req: AiRequest) {
       const res = (await client.beta.messages.create(
         {

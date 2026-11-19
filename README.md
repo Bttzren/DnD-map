@@ -47,12 +47,24 @@ All optional, set as environment variables.
 | `PORT` | Port to listen on. Default `3000`. |
 | `ANTHROPIC_API_KEY` | Turns on **Describe it to the AI**. Without it, the free built-in generator still works. |
 | `AI_MODEL` | Claude model for AI maps. Default `claude-opus-5-5`. |
+| `OLLAMA_URL` | Where Ollama runs, for free local AI maps when there's no `ANTHROPIC_API_KEY`. Default `http://127.0.0.1:11434`. Set to `off` to disable. |
+| `OLLAMA_MODEL` | Local model to use. Default `qwen2.5:7b` (a few GB). Any Ollama model that handles JSON well works. |
 | `HOST_PASSWORD` | If set, starting a new game requires this password, so strangers can't use your server or your AI credit. Players never need it. |
 | `SECRET_KEY` | Any long random string. Lets the server check a DM's key after it has lost its disk. Set this when hosting online. (`HOST_PASSWORD` works as a fallback.) |
 | `DATA_DIR` | Where games are saved. Default `./data`. Games untouched for 30 days are deleted. |
 
-AI maps are limited to 5 per minute per game. Each one is a single Claude
-request, billed to your API key.
+AI maps are limited to 5 per minute per game.
+
+### Two ways to get AI maps
+
+- **Claude** (best maps): set `ANTHROPIC_API_KEY`. Each map is one request,
+  billed to your key.
+- **Free, on your own computer**: install [Ollama](https://ollama.com/download)
+  and open it. With no API key set, DnD Map finds it automatically. The first
+  time, press **Download the AI model** in **Generate** (a few GB, once).
+  After that AI maps are free, private and work offline. A laptop takes from
+  under a minute to a few minutes per map, and small local models follow the
+  description less closely than Claude.
 
 ## Running a session
 
