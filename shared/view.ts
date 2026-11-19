@@ -11,6 +11,8 @@ import type {
 export interface PlayerToken {
   id: string; name: string; label: string; color: string; size: number; kind: TokenKind;
   x: number; y: number; down: boolean; conditions: string[];
+  /** Rounds left on effects that have a duration. */
+  rounds?: Record<string, number>;
   hp: { cur: number; max: number } | null;
   hpBar: number | null;
   hpLabel: string | null;
@@ -52,12 +54,21 @@ function tokenForPlayers(t: Token): PlayerToken {
   const ratio = hasHp ? Math.max(0, Math.min(1, t.hp! / t.maxHp!)) : 0;
   return {
     id: t.id, name: t.name, label: t.label, color: t.color, size: t.size, kind: t.kind,
-    x: t.x, y: t.y, down: t.down, conditions: t.conditions.slice(),
+    x: t.x, y: t.y, down: t.down,
+    // Effects the DM keeps secret never leave the server.
+    conditions: t.conditions.filter((c) => !t.effectInfo?.[c]?.hidden),
+    ...roundsFor(t),
     hp: hasHp && t.hpVisibility === 'exact' ? { cur: t.hp!, max: t.maxHp! } : null,
     hpBar: hasHp && t.hpVisibility === 'bar' ? ratio : null,
     hpLabel: hasHp && t.hpVisibility === 'vague' ? hpLabel(ratio) : null,
     ...(t.image ? { image: t.image } : {}),
   };
+}
+
+function roundsFor(t: Token): { rounds?: Record<string, number> } {
+  const out: Record<string, number> = {};
+  for (const c of t.conditions) { const i = t.effectInfo?.[c]; if (i?.rounds && !i.hidden) out[c] = i.rounds; }
+  return Object.keys(out).length ? { rounds: out } : {};
 }
 
 export function visibleTokens(map: MapData): Token[] {

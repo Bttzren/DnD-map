@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { effectDef, tickEffects } from '../../../shared/effects';
 import { uid, type Initiative, type InitiativeEntry, type MapData } from '../../../shared/types';
 import { Avatar, Icon, NumField, Switch, toast, useStore } from '../../ui';
 import type { MapView } from '../../render/mapView';
@@ -37,6 +38,13 @@ export function advance(ctl: DmCtl, dir: 1 | -1, view?: MapView | null) {
   }
   ctl.dispatch({ t: 'map.patch', mapId: map.id, patch: { initiative: { ...init, turn, round } } }, { undoable: false });
   const tk = map.tokens.find((t) => t.id === init.entries[turn]?.tokenId);
+  // Its turn starts: timed effects count down, and the DM hears what wore off.
+  if (tk && dir === 1 && tk.effectInfo) {
+    const { conditions, effectInfo, expired } = tickEffects(tk.conditions, tk.effectInfo);
+    const { effectInfo: _old, ...rest } = tk;
+    ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'tokens', item: { ...rest, conditions, ...(effectInfo ? { effectInfo } : {}) } }, { undoable: false });
+    if (expired.length) toast(`${expired.map((c) => effectDef(c).label).join(', ')} wore off ${tk.name}`, 'info', 4500);
+  }
   if (tk && view) view.centerOn(tk.x + tk.size / 2, tk.y + tk.size / 2, view.cam.z);
 }
 

@@ -1,12 +1,12 @@
 import { useState } from 'preact/hooks';
 import { findMap } from '../../shared/ops';
-import { CONDITIONS, HP_VISIBILITY, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, TOKEN_KINDS, uid, type AreaTemplate, type HpVisibility, type MapObject, type Token } from '../../shared/types';
+import { HP_VISIBILITY, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, TOKEN_KINDS, uid, type AreaTemplate, type HpVisibility, type MapObject, type Token } from '../../shared/types';
 import { footprint } from '../../shared/grid';
 import { templateCells } from '../../shared/templates';
 import { EFFECTS } from '../render/spells';
 import { TRAPS, TRAP_TYPES, trapSummary, type TrapInfo } from '../../shared/traps';
 import { hpLabel } from '../../shared/view';
-import { conditionColor } from '../render/mapView';
+import { EFFECTS as STATUS_EFFECTS, effectDef, type EffectInfo } from '../../shared/effects';
 import { Avatar, Icon, NumField, Seg, Switch, confirmDialog, toast, useStore } from '../ui';
 import { fileToIcon, pickImage } from '../images';
 import type { DmCtl } from './state';
@@ -31,6 +31,25 @@ export function Inspector({ ctl }: { ctl: DmCtl }) {
         <div class="head"><Icon name="users" /><b class="grow">{toks.length} tokens selected</b><button class="btn ghost sm icon" onClick={() => ctl.set({ selected: [] })} aria-label="Deselect"><Icon name="x" size={15} /></button></div>
         <div class="section">
           <span class="hint">Drag any of them to move the group. Shift-click to add or remove.</span>
+          <div class="row">
+            <select class="input sm grow" value="" aria-label="Add an effect to all of them" onChange={(e) => {
+              const name = e.currentTarget.value;
+              if (!name) return;
+              ctl.begin(); toks.forEach((t) => ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'tokens', item: withEffect(t, name) })); ctl.end();
+              toast(`${effectDef(name).label} on ${toks.length} tokens`, 'ok');
+              e.currentTarget.value = '';
+            }}>
+              <option value="">Add an effect to all…</option>
+              {GROUPS.map((g) => (
+                <optgroup key={g.id} label={g.label}>
+                  {STATUS_EFFECTS.filter((x) => x.group === g.id).map((x) => <option key={x.id} value={x.id}>{x.icon} {x.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            {toks.some((t) => t.conditions.length) && (
+              <button class="btn sm" onClick={() => { ctl.begin(); toks.forEach((t) => { const { effectInfo: _e, ...rest } = t; ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'tokens', item: { ...rest, conditions: [] } }); }); ctl.end(); }}>Clear effects</button>
+            )}
+          </div>
           <div class="row wrap">
             <button class="btn sm" onClick={() => { ctl.begin(); toks.forEach((t) => ctl.dispatch({ t: 'item.put', mapId: map.id, coll: 'tokens', item: { ...t, hidden: !allHidden } })); ctl.end(); }}>
               <Icon name={allHidden ? 'eye' : 'eyeOff'} size={15} /> {allHidden ? 'Reveal all' : 'Hide all'}
@@ -124,18 +143,7 @@ export function Inspector({ ctl }: { ctl: DmCtl }) {
         </div>
       </div>
 
-      <div class="section">
-        <span class="label">Conditions</span>
-        <div class="conds">
-          {CONDITIONS.map((c) => {
-            const on = t.conditions.includes(c);
-            return (
-              <button key={c} class={`chip${on ? ' on' : ''}`} style={on ? { background: conditionColor(c) } : undefined}
-                onClick={() => put({ conditions: on ? t.conditions.filter((x) => x !== c) : [...t.conditions, c] })}>{c}</button>
-            );
-          })}
-        </div>
-      </div>
+      <EffectsSection t={t} put={put} />
 
       <div class="section">
         <div class="row wrap">
@@ -260,6 +268,79 @@ function OtherCard({ ctl }: { ctl: DmCtl }) {
         <Switch checked={!item.hidden} onChange={(v) => put({ hidden: !v })} label={item.hidden ? 'Only you see it' : 'Players see it'} />
         <button class="btn sm danger" onClick={() => { ctl.dispatch({ t: 'item.delete', mapId: map.id, coll: other.coll, id: item.id }); ctl.set({ other: null }); }}><Icon name="trash" size={14} /> Delete</button>
       </div>
+    </div>
+  );
+}
+
+const GROUPS: { id: 'condition' | 'helpful' | 'harmful'; label: string }[] = [
+  { id: 'condition', label: 'Conditions' }, { id: 'helpful', label: 'Helpful' }, { id: 'harmful', label: 'Harmful' },
+];
+
+/** Add an effect to a token (or several): with an optional duration, and secret from players if wanted. */
+export function withEffect(t: Token, name: string, info: EffectInfo = {}): Token {
+  const conditions = t.conditions.includes(name) ? t.conditions : [...t.conditions, name];
+  const effectInfo = { ...(t.effectInfo ?? {}) };
+  if (info.rounds !== undefined || info.hidden) effectInfo[name] = { ...effectInfo[name], ...info };
+  return { ...t, conditions, ...(Object.keys(effectInfo).length ? { effectInfo } : {}) };
+}
+function withoutEffect(t: Token, name: string): Token {
+  const { effectInfo: old, ...rest } = t;
+  const effectInfo = { ...(old ?? {}) };
+  delete effectInfo[name];
+  return { ...rest, conditions: t.conditions.filter((c) => c !== name), ...(Object.keys(effectInfo).length ? { effectInfo } : {}) };
+}
+
+function EffectsSection({ t, put }: { t: Token; put: (patch: Partial<Token>) => void }) {
+  const [group, setGroup] = useState<'condition' | 'helpful' | 'harmful'>('condition');
+  const [custom, setCustom] = useState('');
+  const set = (next: Token) => put({ conditions: next.conditions, effectInfo: next.effectInfo });
+  const setInfo = (c: string, patch: EffectInfo) => {
+    const cur = { ...(t.effectInfo?.[c] ?? {}), ...patch };
+    if (cur.rounds === undefined) delete cur.rounds;
+    if (!cur.hidden) delete cur.hidden;
+    const effectInfo = { ...(t.effectInfo ?? {}) };
+    if (Object.keys(cur).length) effectInfo[c] = cur; else delete effectInfo[c];
+    put({ effectInfo: Object.keys(effectInfo).length ? effectInfo : undefined });
+  };
+  return (
+    <div class="section">
+      <span class="label">Effects</span>
+      {t.conditions.length > 0 && (
+        <div class="effect-list">
+          {t.conditions.map((c) => {
+            const d = effectDef(c), info = t.effectInfo?.[c] ?? {};
+            return (
+              <div key={c} class={`effect-row${info.hidden ? ' secret' : ''}`} title={d.info}>
+                <span class="effect-icon" style={{ background: d.color }}>{d.icon}</span>
+                <span class="grow">{d.label}</span>
+                <span class="effect-rounds" title="Rounds left (counts down on its turn)">
+                  <button class="btn ghost sm icon" onClick={() => setInfo(c, { rounds: info.rounds ? (info.rounds > 1 ? info.rounds - 1 : undefined) : undefined })} aria-label="Fewer rounds">−</button>
+                  <b>{info.rounds ? `${info.rounds}r` : '∞'}</b>
+                  <button class="btn ghost sm icon" onClick={() => setInfo(c, { rounds: Math.min(99, (info.rounds ?? 0) + 1) })} aria-label="More rounds">+</button>
+                </span>
+                <button class="btn ghost sm icon" onClick={() => setInfo(c, { hidden: !info.hidden })} title={info.hidden ? 'Secret: only you see it. Click to show players' : 'Players see it. Click to keep it secret'}>
+                  <Icon name={info.hidden ? 'eyeOff' : 'eye'} size={14} />
+                </button>
+                <button class="btn ghost sm icon" onClick={() => set(withoutEffect(t, c))} aria-label={`Remove ${d.label}`}><Icon name="x" size={14} /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <Seg full value={group} onChange={setGroup} options={GROUPS.map((g) => ({ v: g.id, label: g.label }))} />
+      <div class="conds">
+        {STATUS_EFFECTS.filter((e) => e.group === group).map((e) => {
+          const on = t.conditions.includes(e.id);
+          return (
+            <button key={e.id} class={`chip effect-chip${on ? ' on' : ''}`} style={on ? { background: e.color } : undefined} title={e.info}
+              onClick={() => set(on ? withoutEffect(t, e.id) : withEffect(t, e.id))}>{e.icon} {e.label}</button>
+          );
+        })}
+      </div>
+      <form class="row" onSubmit={(ev) => { ev.preventDefault(); const n = custom.trim(); if (n) { set(withEffect(t, n.slice(0, 24))); setCustom(''); } }}>
+        <input class="input sm grow" value={custom} maxLength={24} placeholder="Other effect, e.g. Turned" onInput={(ev) => setCustom(ev.currentTarget.value)} />
+        <button class="btn sm" disabled={!custom.trim()}>Add</button>
+      </form>
     </div>
   );
 }

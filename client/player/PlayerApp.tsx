@@ -5,7 +5,8 @@ import { defaultScreen, type ScreenState } from '../../shared/types';
 import { pref } from '../local';
 import { Connection, type Status } from '../net';
 import { fromPlayerView } from '../render/adapt';
-import { MapView, conditionColor } from '../render/mapView';
+import { MapView } from '../render/mapView';
+import { effectDef } from '../../shared/effects';
 import type { Ping, RenderToken } from '../render/types';
 import { Avatar, Icon, Logo, Modal, toast } from '../ui';
 import { AppearanceButton } from '../theme';
@@ -200,7 +201,7 @@ function PlayerView(p: { code: string; name: string }) {
         <div class="tooltip" style={{ left: `${tip.sx}px`, top: `${tip.sy}px` }}>
           <b>{tip.token.name}</b>
           {tip.token.hpText && <span class="muted"> · {tip.token.hpText}</span>}
-          {tip.token.conditions.length > 0 && <div class="small muted">{tip.token.conditions.join(', ')}</div>}
+          {tip.token.conditions.length > 0 && <div class="small muted">{tip.token.conditions.map((c) => `${effectDef(c).icon} ${effectDef(c).label}`).join(' · ')}</div>}
           {tip.token.down && <div class="small" style={{ color: '#f87171' }}>Down</div>}
         </div>
       )}
@@ -267,7 +268,10 @@ function PartyChip({ t, img, active, onClick }: { t: PToken; img: ImageResolver;
         {hp.ratio !== null && <span class="pchip-bar"><span style={{ width: `${Math.max(0, Math.min(1, hp.ratio)) * 100}%`, background: hpColor(hp.ratio) }} /></span>}
         <span class="pchip-meta">
           {hp.text && <span>{hp.text}</span>}
-          {t.conditions.slice(0, 3).map((c) => <span key={c} class="pchip-cond" title={c} style={{ background: conditionColor(c) }}>{c}</span>)}
+          {t.conditions.slice(0, 3).map((c) => {
+            const d = effectDef(c), n = t.rounds?.[c];
+            return <span key={c} class="pchip-cond" title={`${d.label}${n ? ` (${n} rounds)` : ''}: ${d.info}`} style={{ background: d.color }}><i>{d.icon}</i><span class="pc-label"> {d.label}</span>{n ? ` ${n}` : ''}</span>;
+          })}
           {t.conditions.length > 3 && <span class="faint">+{t.conditions.length - 3}</span>}
         </span>
       </span>

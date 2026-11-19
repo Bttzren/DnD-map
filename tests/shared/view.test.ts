@@ -326,3 +326,29 @@ describe('traps', () => {
     expect(trapsCrossed(map, { size: 2 }, { x: 1, y: -1 }, { x: 5, y: -1 }).map((o) => o.id)).toEqual(['a']);
   });
 });
+
+describe('status effects', () => {
+  it('keeps durations, hides secret effects from players, and shows players the rounds left', () => {
+    const g = game(); const m = g.maps[0];
+    for (let i = 0; i < m.fog.length; i++) m.fog[i] = 1;
+    const orc = makeToken({ name: 'Orc', x: 2, y: 2, conditions: ['burning', 'hexed', 'SECRET-CURSE', 'burning'] });
+    applyOp(g, { t: 'item.put', mapId: m.id, coll: 'tokens', item: { ...orc, effectInfo: { burning: { rounds: 3 }, 'SECRET-CURSE': { hidden: true }, nothere: { rounds: 2 } } } });
+    const saved = m.tokens.find((t) => t.name === 'Orc')!;
+    expect(saved.conditions).toEqual(['burning', 'hexed', 'SECRET-CURSE']);
+    expect(saved.effectInfo).toEqual({ burning: { rounds: 3 }, 'SECRET-CURSE': { hidden: true } });
+    const seen = playerView(g).map!.tokens.find((t) => t.name === 'Orc')!;
+    expect(seen.conditions).toEqual(['burning', 'hexed']);
+    expect(seen.rounds).toEqual({ burning: 3 });
+    expect(JSON.stringify(playerView(g))).not.toContain('SECRET-CURSE');
+  });
+
+  it('counts durations down and removes what wears off', async () => {
+    const { tickEffects, effectDef } = await import('../../shared/effects');
+    const r = tickEffects(['burning', 'blessed', 'hexed'], { burning: { rounds: 1 }, blessed: { rounds: 3, hidden: true } });
+    expect(r.expired).toEqual(['burning']);
+    expect(r.conditions).toEqual(['blessed', 'hexed']);
+    expect(r.effectInfo).toEqual({ blessed: { rounds: 2, hidden: true } });
+    expect(effectDef('burning').look).toBe('fire');
+    expect(effectDef('Turned').label).toBe('Turned');
+  });
+});

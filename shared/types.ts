@@ -1,5 +1,6 @@
 // Core data model shared by server and client.
 import type { TrapInfo } from './traps';
+import type { EffectInfo } from './effects';
 // Coordinates are in grid cells; one cell is 5 ft.
 
 export const TERRAINS = [
@@ -88,6 +89,8 @@ export interface Token {
   initMod?: number;
   /** Picture id (a key of Game.images), shown instead of the label. */
   image?: string;
+  /** Per effect in `conditions`: rounds left, and whether players can't see it. */
+  effectInfo?: Record<string, EffectInfo>;
 }
 
 export interface AreaTemplate {

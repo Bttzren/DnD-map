@@ -10,6 +10,7 @@ import type { StaticReply, StaticRequest } from './staticWorker';
 import { loadTextures, texturesReady } from './textures';
 import type { Overlay, RenderMap, RenderToken } from './types';
 import { EFFECTS } from './spells';
+import { effectDef, type EffectLook } from '../../shared/effects';
 
 export interface CellEvent {
   /** Fractional cell coordinates. */
@@ -789,6 +790,11 @@ export class MapView {
     const active = this.map?.activeTokenId === tk.id;
     ctx.save();
     if (tk.hidden) ctx.globalAlpha = 0.5;
+    const looks = new Set(tk.conditions.map((c) => effectDef(c).look).filter((l): l is EffectLook => !!l));
+    const seed = hashId(tk.id);
+    // Invisible or hidden creatures are drawn faint.
+    if (looks.has('invisible')) ctx.globalAlpha *= 0.42;
+    if (looks.size) effectsUnder(ctx, looks, cx, cy, r, z, t, seed);
 
     if (active) {
       const pulse = 0.5 + 0.5 * Math.sin(t * 4);
@@ -829,6 +835,8 @@ export class MapView {
       ctx.fillText(tk.label, cx, cy + r * (emoji ? 0.08 : 0.04));
     }
 
+    if (looks.size) effectsOver(ctx, looks, cx, cy, r, z, t, seed);
+
     if (tk.down) {
       ctx.fillStyle = 'rgba(20,20,20,0.6)';
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
@@ -842,18 +850,31 @@ export class MapView {
       ctx.setLineDash([]);
     }
 
-    // Condition pips around the rim.
-    tk.conditions.slice(0, 8).forEach((c, i) => {
-      const a = -Math.PI / 2 + Math.PI * 0.25 + i * (Math.PI / 5);
-      const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r;
-      const pr = Math.max(4, z * 0.11);
-      ctx.fillStyle = conditionColor(c);
-      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
-      if (pr >= 6) {
-        ctx.fillStyle = '#111'; ctx.font = `700 ${pr * 1.2}px Inter, system-ui, sans-serif`;
-        ctx.fillText(c[0].toUpperCase(), px, py + 0.5);
-      }
+    // Effect badges around the rim: icon on its colour, "+n" past six.
+    const shown = tk.conditions.slice(0, tk.conditions.length > 6 ? 5 : 6);
+    const pr = Math.max(5, Math.min(14, z * 0.14));
+    const badge = (i: number, fill: string, draw: () => void) => {
+      const a = -Math.PI / 2 + Math.PI * 0.22 + i * (Math.PI / 4.6);
+      const px = cx + Math.cos(a) * (r + pr * 0.25), py = cy + Math.sin(a) * (r + pr * 0.25);
+      ctx.save();
+      ctx.fillStyle = fill; ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.translate(px, py); draw();
+      ctx.restore();
+    };
+    shown.forEach((c, i) => {
+      const d = effectDef(c);
+      badge(i, d.color, () => {
+        if (pr < 7) return;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (d.icon === '•') { ctx.fillStyle = '#111'; ctx.font = `700 ${pr * 1.1}px Inter, system-ui, sans-serif`; ctx.fillText(d.label[0].toUpperCase(), 0, 0.5); return; }
+        ctx.font = `${pr * 1.15}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+        ctx.fillText(d.icon, 0, pr * 0.08);
+      });
+    });
+    if (tk.conditions.length > 6) badge(5, '#27272a', () => {
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `700 ${pr * 0.95}px Inter, system-ui, sans-serif`; ctx.fillText(`+${tk.conditions.length - 5}`, 0, 0.5);
     });
 
     // HP bar.
@@ -950,12 +971,143 @@ export class MapView {
   }
 }
 
-const COND_COLORS: Record<string, string> = {
-  poisoned: '#84cc16', prone: '#a16207', stunned: '#facc15', paralyzed: '#eab308', blinded: '#64748b', charmed: '#ec4899',
-  frightened: '#a855f7', grappled: '#f97316', restrained: '#ea580c', invisible: '#cbd5e1', unconscious: '#475569',
-  concentrating: '#38bdf8', blessed: '#fde68a', hasted: '#22d3ee', raging: '#dc2626', deafened: '#94a3b8',
-};
-export const conditionColor = (c: string) => COND_COLORS[c] ?? '#e5e7eb';
+export const conditionColor = (c: string) => effectDef(c).color;
+
+type C2D = CanvasRenderingContext2D;
+
+/** Effects drawn behind the token: auras, glows, a flying shadow. */
+function effectsUnder(ctx: C2D, looks: Set<EffectLook>, cx: number, cy: number, r: number, z: number, t: number, seed: number) {
+  const aura = (color: string, alpha: number, grow: number) => {
+    const g = ctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, r * grow);
+    g.addColorStop(0, hexA(color, alpha)); g.addColorStop(1, hexA(color, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r * grow, 0, Math.PI * 2); ctx.fill();
+  };
+  ctx.save();
+  if (looks.has('flying')) {
+    // A shadow on the ground below and to the side.
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(cx + r * 0.25, cy + r * 0.55, r * 0.8, r * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  if (looks.has('glow')) aura('#fde68a', 0.45 + 0.15 * Math.sin(t * 2.5 + seed), 1.55);
+  if (looks.has('rage')) aura('#ef4444', 0.5 + 0.25 * Math.sin(t * 6 + seed), 1.5);
+  if (looks.has('fire')) {
+    aura('#f97316', 0.55 + 0.15 * Math.sin(t * 9 + seed), 1.6);
+    // Licking flames around the rim.
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2 + seed;
+      const h = r * (0.45 + 0.25 * Math.sin(t * 8 + k * 1.7 + seed));
+      const bx = cx + Math.cos(a) * r * 0.85, by = cy + Math.sin(a) * r * 0.85;
+      const g = ctx.createLinearGradient(bx, by, bx, by - h);
+      g.addColorStop(0, 'rgba(249,115,22,0.95)'); g.addColorStop(1, 'rgba(253,224,71,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(bx - r * 0.18, by); ctx.quadraticCurveTo(bx, by - h * 1.2, bx + r * 0.18, by); ctx.closePath(); ctx.fill();
+    }
+  }
+  if (looks.has('shield')) {
+    ctx.strokeStyle = hexA('#93c5fd', 0.7); ctx.lineWidth = Math.max(2, z * 0.05);
+    ctx.fillStyle = hexA('#93c5fd', 0.12 + 0.05 * Math.sin(t * 3));
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  if (looks.has('haste')) {
+    ctx.strokeStyle = hexA('#38bdf8', 0.75); ctx.lineWidth = Math.max(1.5, z * 0.04); ctx.lineCap = 'round';
+    for (let k = 0; k < 3; k++) {
+      const y = cy - r * 0.5 + k * r * 0.5, off = ((t * 3 + k * 0.3) % 1) * r * 0.5;
+      ctx.beginPath(); ctx.moveTo(cx - r * 1.1 - off, y); ctx.lineTo(cx - r * 1.6 - off, y); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/** Effects drawn over the token: ice, stone, bubbles, webs, stars and so on. */
+function effectsOver(ctx: C2D, looks: Set<EffectLook>, cx: number, cy: number, r: number, z: number, t: number, seed: number) {
+  ctx.save();
+  const disc = () => { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); };
+  const rnd = (i: number, k: number) => cellNoise(seed, i, k);
+  if (looks.has('stone')) { disc(); ctx.fillStyle = 'rgba(140,136,130,0.72)'; ctx.fill(); }
+  if (looks.has('ice')) {
+    disc(); ctx.fillStyle = 'rgba(186,230,253,0.45)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(240,249,255,0.9)'; ctx.lineWidth = Math.max(1, z * 0.025);
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + seed;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r * 0.5, cy + Math.sin(a) * r * 0.5); ctx.lineTo(cx + Math.cos(a) * r * 1.05, cy + Math.sin(a) * r * 1.05); ctx.stroke();
+    }
+  }
+  if (looks.has('poison')) {
+    for (let k = 0; k < 5; k++) {
+      const p = (t * 0.5 + rnd(k, 1)) % 1;
+      const bx = cx + (rnd(k, 2) - 0.5) * r * 1.4, by = cy + r * 0.6 - p * r * 1.8;
+      ctx.fillStyle = `rgba(132,204,22,${0.75 * (1 - p)})`;
+      ctx.beginPath(); ctx.arc(bx, by, r * (0.08 + rnd(k, 3) * 0.08), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (looks.has('curse')) {
+    for (let k = 0; k < 4; k++) {
+      const p = (t * 0.35 + k / 4) % 1;
+      const bx = cx + Math.sin(t + k * 2) * r * 0.6, by = cy - p * r * 1.6;
+      const g = ctx.createRadialGradient(bx, by, 0, bx, by, r * 0.4);
+      g.addColorStop(0, `rgba(126,34,206,${0.55 * (1 - p)})`); g.addColorStop(1, 'rgba(126,34,206,0)');
+      ctx.fillStyle = g; ctx.fillRect(bx - r * 0.4, by - r * 0.4, r * 0.8, r * 0.8);
+    }
+  }
+  if (looks.has('web')) {
+    ctx.save(); disc(); ctx.clip();
+    ctx.strokeStyle = 'rgba(245,245,244,0.8)'; ctx.lineWidth = Math.max(1, z * 0.02);
+    for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI + seed; ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * r, cy - Math.sin(a) * r); ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); ctx.stroke(); }
+    for (const f of [0.35, 0.7]) { ctx.beginPath(); ctx.arc(cx, cy, r * f, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
+  }
+  if (looks.has('blood')) {
+    for (let k = 0; k < 3; k++) {
+      const p = (t * 0.6 + k / 3) % 1;
+      const bx = cx + (rnd(k, 5) - 0.5) * r * 1.2, by = cy + r * 0.4 + p * r * 0.9;
+      ctx.fillStyle = `rgba(220,38,38,${0.9 * (1 - p * 0.7)})`;
+      ctx.beginPath(); ctx.moveTo(bx, by - r * 0.16); ctx.quadraticCurveTo(bx + r * 0.1, by, bx, by + r * 0.07); ctx.quadraticCurveTo(bx - r * 0.1, by, bx, by - r * 0.16); ctx.fill();
+    }
+  }
+  if (looks.has('stun')) {
+    // Stars circling above the head.
+    ctx.fillStyle = '#facc15';
+    for (let k = 0; k < 3; k++) {
+      const a = t * 2.5 + (k * Math.PI * 2) / 3;
+      const sx = cx + Math.cos(a) * r * 0.7, sy = cy - r * 0.95 + Math.sin(a) * r * 0.22;
+      ctx.beginPath();
+      for (let j = 0; j < 10; j++) { const rr = j % 2 ? r * 0.06 : r * 0.15; const aa = -Math.PI / 2 + (j * Math.PI) / 5; ctx.lineTo(sx + Math.cos(aa) * rr, sy + Math.sin(aa) * rr); }
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  if (looks.has('sleep')) {
+    ctx.fillStyle = '#c7d2fe'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let k = 0; k < 3; k++) {
+      const p = (t * 0.4 + k / 3) % 1;
+      ctx.globalAlpha = (1 - p) * 0.95;
+      ctx.font = `700 ${r * (0.3 + p * 0.25)}px Inter, system-ui, sans-serif`;
+      ctx.fillText('z', cx + r * 0.6 + p * r * 0.5, cy - r * 0.6 - p * r * 0.9);
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (looks.has('focus')) {
+    ctx.strokeStyle = 'rgba(96,165,250,0.85)'; ctx.lineWidth = Math.max(1.5, z * 0.035);
+    ctx.setLineDash([r * 0.25, r * 0.18]); ctx.lineDashOffset = -t * r;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.15, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (looks.has('slow')) {
+    ctx.strokeStyle = 'rgba(167,139,250,0.85)'; ctx.lineWidth = Math.max(1.5, z * 0.04);
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.15, -Math.PI / 2, -Math.PI / 2 + ((t * 0.5) % 1) * Math.PI * 2); ctx.stroke();
+  }
+  if (looks.has('mark')) {
+    ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = Math.max(1.5, z * 0.035);
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.8);
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.2, 0, Math.PI * 2); ctx.stroke();
+    for (let k = 0; k < 4; k++) { ctx.rotate(Math.PI / 2); ctx.beginPath(); ctx.moveTo(r * 0.95, 0); ctx.lineTo(r * 1.45, 0); ctx.stroke(); }
+    ctx.restore();
+  }
+  if (looks.has('fear')) {
+    ctx.strokeStyle = 'rgba(192,132,252,0.8)'; ctx.lineWidth = Math.max(1.5, z * 0.035);
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + s * r * 1.15, cy, r * 0.25, s > 0 ? -0.9 : Math.PI - 0.9, s > 0 ? 0.9 : Math.PI + 0.9); ctx.stroke(); }
+  }
+  ctx.restore();
+}
 
 function hexA(hex: string, a: number) {
   if (!hex.startsWith('#') || hex.length < 7) return `rgba(255,255,255,${a})`;

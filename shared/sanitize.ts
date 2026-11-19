@@ -2,6 +2,7 @@
 // clean it into the exact shapes the rest of the code relies on.
 import type { Coll, CollTypes } from './ops';
 import { TRAP_STATES, TRAP_TYPES, type TrapInfo } from './traps';
+import type { EffectInfo } from './effects';
 import {
   AMBIENCES, DISTANCE_RULES, DOOR_STATES, HP_VISIBILITY, OBJECT_KINDS, TEMPLATE_EFFECTS, TEMPLATE_SHAPES, THEMES, TOKEN_KINDS,
   MAX_IMAGES, defaultScreen, defaultSettings, isImageData, isImageId,
@@ -40,13 +41,23 @@ function token(r: Raw, m: Dims): Token | null {
     hp: intOrNull(r.hp, -9999, 99999),
     maxHp: intOrNull(r.maxHp, 0, 99999),
     ac: intOrNull(r.ac, 0, 99),
-    conditions: Array.isArray(r.conditions) ? r.conditions.filter((c): c is string => typeof c === 'string').slice(0, 20).map((c) => c.slice(0, 24)) : [],
+    conditions: Array.isArray(r.conditions) ? [...new Set(r.conditions.filter((c): c is string => typeof c === 'string').map((c) => c.trim().slice(0, 24)).filter(Boolean))].slice(0, 20) : [],
     note: str(r.note, 1000),
     down: bool(r.down),
     hpVisibility: oneOf(r.hpVisibility, HP_VISIBILITY, kind === 'player' || kind === 'ally' ? 'exact' : 'vague'),
   };
   if (typeof r.initMod === 'number') out.initMod = int(r.initMod, 0, -20, 20);
   if (isImageId(r.image)) out.image = r.image;
+  const info = obj(r.effectInfo);
+  const effectInfo: Record<string, EffectInfo> = {};
+  for (const c of out.conditions) {
+    const i = obj(info[c]);
+    const e: EffectInfo = {};
+    if (typeof i.rounds === 'number') e.rounds = int(i.rounds, 1, 1, 99);
+    if (bool(i.hidden)) e.hidden = true;
+    if (e.rounds !== undefined || e.hidden) effectInfo[c] = e;
+  }
+  if (Object.keys(effectInfo).length) out.effectInfo = effectInfo;
   return out;
 }
 

@@ -117,9 +117,16 @@ change the brush, `Tab` toggles the side panel, and holding `Space` pans.
 
 - **Tokens:** a library of monsters, NPCs and party classes with HP and AC,
   added in batches. Add them hidden for an ambush. Click a token for its
-  inspector: damage and heal, conditions, AC, notes only you see, and what
-  players see of its health (numbers, a bar, a word like *bloodied*, or
-  nothing).
+  inspector: damage and heal, AC, notes only you see, and what players see
+  of its health (numbers, a bar, a word like *bloodied*, or nothing).
+- **Status effects:** every 5e condition, helpful effects (blessed, hasted,
+  raging, flying, shielded…) and harmful ones (burning, bleeding, frozen,
+  slowed, cursed, hexed, marked, asleep, webbed…), or type your own. Give
+  one a duration in rounds and it counts down on that creature's turn and
+  tells you when it wears off; keep one secret and players never see it.
+  Effects show on the token itself (flames, frost, webs, a shield bubble,
+  stars for stunned…). Select several tokens to add an effect to all of
+  them, for example everyone caught in a spell area.
 - **Pictures:** give any token a picture from your files (in its inspector,
   **Upload**). Added a batch of goblins? Picture one, then **Use for the other
   goblins**.
