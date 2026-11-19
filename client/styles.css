@@ -383,3 +383,31 @@ textarea.input { height: auto; min-height: 76px; padding: 8px 10px; resize: vert
 .effect-rounds { display: inline-flex; align-items: center; gap: 0; }
 .effect-rounds b { min-width: 26px; text-align: center; font-size: 12px; }
 .effect-chip { gap: 4px; }
+
+/* Token quick menu */
+.btn.ok { color: #bbf7d0; border-color: #1f5135; background: #13261b; }
+:root[data-mode='light'] .btn.ok { color: #166534; background: #e7f6ec; border-color: #9fd6b2; }
+:root[data-mode='light'] .btn.danger { color: #9f1d22; background: #fdecec; border-color: #efb5b7; }
+.token-menu { position: absolute; z-index: 40; width: 260px; display: grid; gap: 8px; padding: 10px; box-shadow: var(--shadow); animation: rise 0.12s ease-out; }
+.tm-head { display: flex; align-items: center; gap: 8px; }
+.tm-effects { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.tm-fx { height: 32px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--well); font-size: 16px; cursor: pointer; }
+.tm-fx.on { border-color: transparent; box-shadow: 0 0 0 2px var(--text) inset; }
+.tm-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.tm-actions .btn { flex: 1 1 auto; }
+
+.rail .grow { flex: 1; }
+.shortcuts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+.shortcuts h4 { margin: 8px 0 6px; font: 700 11px var(--ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-2); }
+.shortcuts h4:first-child { margin-top: 0; }
+.sc { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; color: var(--muted); }
+.sc .kbd { min-width: 34px; text-align: center; font-size: 11px; padding: 2px 6px; color: var(--text); white-space: nowrap; flex: none; }
+
+/* Getting started */
+.guide { position: absolute; right: 12px; top: 56px; z-index: 6; width: 270px; display: grid; gap: 4px; padding: 10px 12px; box-shadow: var(--shadow); }
+.guide-step { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border: 0; background: none; color: var(--text); text-align: left; font-size: 13px; border-radius: 6px; cursor: pointer; }
+.guide-step:hover:not(:disabled) { background: var(--well); }
+.guide-step.done { color: var(--faint); text-decoration: line-through; cursor: default; }
+.guide-check { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-2); display: grid; place-items: center; font-size: 11px; flex: none; color: var(--gold-ink); }
+.guide-step.done .guide-check { background: var(--gold); border-color: var(--gold); }
+@media (max-width: 700px) { .guide { display: none; } }

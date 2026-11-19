@@ -109,6 +109,8 @@ blank and paint.
 | `L` | Label | Text on the map |
 | `G` | Ping | Flash a spot for everyone; shift-click also pulls their view there |
 
+Right-click a token (or long-press on a tablet) for a quick menu: damage and heal, common effects, hide, knock down, add to initiative, copy or remove. Press `?` for every shortcut.
+
 Also: `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo, `H` hides the selected token,
 `Delete` removes it, `N` advances initiative, `0` fits the map, `[` and `]`
 change the brush, `Tab` toggles the side panel, and holding `Space` pans.

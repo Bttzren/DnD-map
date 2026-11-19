@@ -64,12 +64,16 @@ export interface DmState {
   showRooms: boolean;
   fogTint: boolean;
   share: boolean;
+  /** The keyboard shortcut sheet. */
+  help: boolean;
   ver: number;
   staticVer: number;
   fogVer: number;
   canUndo: boolean;
   canRedo: boolean;
   pings: Ping[];
+  /** The right-click menu for a token, at a point on screen. */
+  menu: { tokenId: string; sx: number; sy: number } | null;
 }
 
 const DEFAULT_OPTS: ToolOpts = {
@@ -103,7 +107,7 @@ export class DmCtl extends Store<DmState> {
       code, secret, status: 'connecting', fatal: secret ? null : 'no-secret', aiEnabled: false, ai: null, aiProgress: null, aiBusy: false,
       game: null, mapId: null, players: [], tool: 'select', opts: { ...DEFAULT_OPTS, ...pref.get<Partial<ToolOpts>>('opts', {}) },
       selected: [], other: null, tab: 'generate', panelOpen: pref.get('panelOpen', true), showRooms: pref.get('showRooms', true),
-      fogTint: true, share: false, ver: 0, staticVer: 0, fogVer: 0, canUndo: false, canRedo: false, pings: [],
+      fogTint: true, share: false, help: false, ver: 0, staticVer: 0, fogVer: 0, canUndo: false, canRedo: false, pings: [], menu: null,
     });
     this.conn = new Connection(
       () => ({ type: 'join', code, role: 'dm', secret: this.state.secret ?? '' }),

@@ -12,6 +12,8 @@ import { PALETTES, TERRAIN_LABEL, swatch } from '../render/palette';
 import { textureFor } from '../render/textures';
 import { Icon, Logo, Modal, NumField, QR, Seg, Switch, confirmDialog, copy, useStore } from '../ui';
 import { Inspector } from './Inspector';
+import { TokenMenu } from './TokenMenu';
+import { Guide } from './Guide';
 import { GeneratePanel } from './panels/GeneratePanel';
 import { InitiativePanel, advance } from './panels/InitiativePanel';
 import { MapPanel } from './panels/MapPanel';
@@ -129,6 +131,7 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
       if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); ctl.redoStep(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === ' ') { if (view) view.spaceDown = true; e.preventDefault(); return; }
+      if (e.key === '?') { ctl.set({ help: !ctl.state.help }); return; }
       const tool = TOOLS.find((t) => t.key.toLowerCase() === k);
       if (tool) { ctl.setTool(tool.id); return; }
       if (e.key === 'Escape') { ctl.set({ selected: [], other: null }); ctl.setTool('select'); return; }
@@ -198,18 +201,25 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
         <nav class="rail" aria-label="Tools">
           {TOOLS.map((t, i) => (
             <Fragment key={t.id}>
-              {(i === 5) && <span class="sep" />}
+              {t.id === 'ruler' && <span class="sep" />}
               <button class={`tool${s.tool === t.id ? ' on' : ''}`} onClick={() => ctl.setTool(t.id)} aria-label={t.label} aria-pressed={s.tool === t.id}>
                 <Icon name={t.icon} />
                 <span class="tip">{t.label} <span class="kbd">{t.key}</span></span>
               </button>
             </Fragment>
           ))}
+          <span class="grow" />
+          <button class="tool" onClick={() => ctl.set({ help: true })} aria-label="Keyboard shortcuts">
+            <b style={{ fontSize: '16px' }}>?</b>
+            <span class="tip">Keyboard shortcuts <span class="kbd">?</span></span>
+          </button>
         </nav>
 
         <div class="stage" ref={hostRef}>
           {map && <ToolBar ctl={ctl} />}
-          {map && (s.selected.length > 0 || s.other) && <Inspector ctl={ctl} />}
+          {map && (s.selected.length > 0 || s.other) && !s.menu && <Inspector ctl={ctl} />}
+          {map && <TokenMenu ctl={ctl} host={hostRef.current} />}
+          <Guide ctl={ctl} />
           {map && game?.screen.banner && <div class="banner banner-preview" title="Players see this banner">{game.screen.banner}</div>}
           {map && (
             <div class="map-chip">
@@ -251,6 +261,40 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
           </div>
         </aside>
       </div>
+
+      {s.help && (
+        <Modal title="Keyboard shortcuts" onClose={() => ctl.set({ help: false })} wide>
+          <div class="shortcuts">
+            <div>
+              <h4>Tools</h4>
+              {TOOLS.map((t) => <div key={t.id} class="sc"><span class="kbd">{t.key}</span>{t.label}</div>)}
+            </div>
+            <div>
+              <h4>Tokens</h4>
+              <div class="sc"><span class="kbd">Right-click</span>Quick menu: damage, heal, effects</div>
+              <div class="sc"><span class="kbd">Shift</span>+ click: select several</div>
+              <div class="sc"><span class="kbd">←↑→↓</span>Nudge the selection</div>
+              <div class="sc"><span class="kbd">H</span>Hide or show</div>
+              <div class="sc"><span class="kbd">Del</span>Remove</div>
+              <h4>Turns</h4>
+              <div class="sc"><span class="kbd">N</span>Next turn</div>
+              <div class="sc"><span class="kbd">Shift N</span>Previous turn</div>
+            </div>
+            <div>
+              <h4>View & edit</h4>
+              <div class="sc"><span class="kbd">Ctrl Z</span>Undo</div>
+              <div class="sc"><span class="kbd">Ctrl Shift Z</span>Redo</div>
+              <div class="sc"><span class="kbd">0</span>Fit the map</div>
+              <div class="sc"><span class="kbd">+ −</span>Zoom</div>
+              <div class="sc"><span class="kbd">Space</span>Hold to pan</div>
+              <div class="sc"><span class="kbd">[ ]</span>Brush size</div>
+              <div class="sc"><span class="kbd">Tab</span>Side panel</div>
+              <div class="sc"><span class="kbd">Esc</span>Deselect</div>
+              <div class="sc"><span class="kbd">?</span>This sheet</div>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {s.share && (
         <Modal title="Invite your players" onClose={() => ctl.set({ share: false })}>

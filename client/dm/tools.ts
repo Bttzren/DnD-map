@@ -127,8 +127,20 @@ export function attachTools(view: MapView, ctl: DmCtl) {
     };
   };
 
+  /** Open the quick menu for the token at this spot, if there is one. */
+  const openMenu = (e: CellEvent) => {
+    const map = ctl.map;
+    const t = map && tokenAt(map, e.x, e.y);
+    if (!t) return;
+    const s = view.toScreen(e.fx, e.fy);
+    ctl.set({ menu: { tokenId: t.id, sx: s.x, sy: s.y }, selected: [t.id], other: null });
+  };
+
   view.handlers = {
     hover: brushPreview,
+    context: openMenu,
+    longpress: (e) => { if (e.touch) openMenu(e); },
+    longpressOk: (e) => e.touch && ctl.state.tool === 'select' && !!ctl.map && !!tokenAt(ctl.map, e.x, e.y),
 
     down(e) {
       const map = ctl.map;

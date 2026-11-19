@@ -33,6 +33,10 @@ export interface MapViewHandlers {
   dblclick?(e: CellEvent): void;
   /** Press and hold without moving. */
   longpress?(e: CellEvent): void;
+  /** May a long press interrupt the drag the tool started here? */
+  longpressOk?(e: CellEvent): boolean;
+  /** Right-click without dragging. */
+  context?(e: CellEvent): void;
   camera?(c: Camera): void;
 }
 
@@ -339,7 +343,12 @@ export class MapView {
       clearTimeout(this.holdTimer);
       if (this.handlers.longpress && e.button === 0) {
         this.holdTimer = setTimeout(() => {
-          if (this.moved || this.pointers.size !== 1 || this.gesture === 'tool') return;
+          if (this.moved || this.pointers.size !== 1) return;
+          // Holding still turns a would-be drag into a long press.
+          if (this.gesture === 'tool') {
+            if (!this.handlers.longpressOk?.(ce)) return;
+            this.handlers.cancel?.(); this.gesture = 'none';
+          }
           this.held = true;
           navigator.vibrate?.(20);
           this.handlers.longpress?.(ce);
@@ -394,6 +403,7 @@ export class MapView {
       if (this.pointers.size === 0) {
         const wasPinch = this.gesture === 'pinch';
         if (!this.moved && !wasPinch && !this.held && performance.now() - this.downAt.t < 450 && e.button === 0) this.handlers.tap?.(ce);
+        if (!this.moved && !wasPinch && e.button === 2) this.handlers.context?.(ce);
         this.gesture = 'none';
       } else if (this.gesture === 'pinch' && this.pointers.size === 1) {
         // Continue as a pan with the remaining finger.
@@ -549,6 +559,7 @@ export class MapView {
     // Tokens (smallest last so they stay clickable on top of big ones).
     const tokens = map.tokens.slice().sort((a, b) => b.size - a.size);
     const seen = new Set<string>();
+    this.plates = [];
     for (const tk of tokens) {
       seen.add(tk.id);
       const target = this.overlay.dragging?.get(tk.id) ?? { x: tk.x, y: tk.y };
@@ -559,6 +570,7 @@ export class MapView {
       this.drawToken(tk, pos.x, pos.y, ox, oy, z, t);
     }
     for (const id of this.tween.keys()) if (!seen.has(id)) this.tween.delete(id);
+    this.drawPlates(z);
 
     // Brush preview / hover.
     const b = this.overlay.brush;
@@ -889,16 +901,35 @@ export class MapView {
 
     // Name plate when zoomed in or selected.
     // Players have party chips for names and HP, so their map stays clean.
-    const showName = selected || this.hoverToken === tk.id || (this.dm && z >= 44);
-    if (showName) {
-      const text = tk.hpText ? `${tk.name} · ${tk.hpText}` : tk.name;
-      ctx.font = `600 ${Math.max(10, Math.min(13, z * 0.26))}px Inter, system-ui, sans-serif`;
-      const tw = ctx.measureText(text).width + 10;
-      const ny = cy - r - Math.max(10, z * 0.28);
-      ctx.fillStyle = 'rgba(12,10,16,0.82)';
-      roundRect(ctx, cx - tw / 2, ny - 9, tw, 18, 9); ctx.fill();
+    const focus = selected || this.hoverToken === tk.id;
+    if (focus || (this.dm && z >= 44) || (this.dm && active && z >= 24)) {
+      this.plates.push({ text: tk.hpText ? `${tk.name} · ${tk.hpText}` : tk.name, cx, y: cy - r - Math.max(10, z * 0.28), priority: focus ? 3 : active ? 2 : 1 });
+    }
+    ctx.restore();
+  }
+
+  private plates: { text: string; cx: number; y: number; priority: number }[] = [];
+
+  /** Name tags, drawn last and never on top of each other: the selected or hovered token always gets its tag. */
+  private drawPlates(z: number) {
+    const ctx = this.ctx;
+    const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+    ctx.save();
+    ctx.font = `600 ${Math.max(10, Math.min(13, z * 0.26))}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const p of this.plates.sort((a, b) => b.priority - a.priority)) {
+      let text = p.text;
+      // Background tags are kept short.
+      if (p.priority < 3 && text.length > 22) text = `${text.slice(0, 20)}…`;
+      const tw = ctx.measureText(text).width + 12;
+      const box = { x0: p.cx - tw / 2, x1: p.cx + tw / 2, y0: p.y - 9, y1: p.y + 9 };
+      if (p.priority < 3 && placed.some((q) => box.x0 < q.x1 + 2 && box.x1 > q.x0 - 2 && box.y0 < q.y1 + 1 && box.y1 > q.y0 - 1)) continue;
+      placed.push(box);
+      ctx.fillStyle = p.priority === 3 ? 'rgba(12,10,16,0.92)' : 'rgba(12,10,16,0.75)';
+      roundRect(ctx, box.x0, box.y0, tw, 18, 9); ctx.fill();
+      if (p.priority === 3) { ctx.strokeStyle = 'rgba(250,204,21,0.6)'; ctx.lineWidth = 1; ctx.stroke(); }
       ctx.fillStyle = '#f4ead5';
-      ctx.fillText(text, cx, ny + 0.5);
+      ctx.fillText(text, p.cx, p.y + 0.5);
     }
     ctx.restore();
   }
