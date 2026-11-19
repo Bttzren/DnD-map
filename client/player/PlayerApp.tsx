@@ -8,6 +8,7 @@ import { fromPlayerView } from '../render/adapt';
 import { MapView, conditionColor } from '../render/mapView';
 import type { Ping, RenderToken } from '../render/types';
 import { Avatar, Icon, Logo, Modal, toast } from '../ui';
+import { AppearanceButton } from '../theme';
 import { fileToIcon, pickImage, playerImages, type ImageResolver } from '../images';
 import { navigate } from '../nav';
 
@@ -210,6 +211,7 @@ function PlayerView(p: { code: string; name: string }) {
             {ruler && <span class="pl-hint">Drag on the map to measure</span>}
             <button class={`round-btn${ruler ? ' on' : ''}`} onClick={() => setRuler(!ruler)} aria-pressed={ruler} aria-label="Measure distance" title="Measure distance"><Icon name="ruler" /></button>
             <button class="round-btn" onClick={() => viewRef.current?.fit()} aria-label="Fit map to screen" title="Fit map to screen"><Icon name="fit" /></button>
+            <AppearanceButton round up />
             {party.length > 0 && <button class="round-btn" onClick={() => setPicSheet(true)} aria-label="Set your character’s picture" title="Set your character’s picture"><Icon name="camera" /></button>}
           </div>
           {party.length > 0 && (

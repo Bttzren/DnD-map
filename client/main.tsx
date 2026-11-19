@@ -6,6 +6,9 @@ import { Home } from './Home';
 import { PlayerApp } from './player/PlayerApp';
 import { Dialogs, Toasts } from './ui';
 import './styles.css';
+import { applyTheme } from './theme';
+
+applyTheme();
 
 function route() {
   const parts = location.pathname.split('/').filter(Boolean);

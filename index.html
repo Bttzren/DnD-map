@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0e0d12" />
+    <script>
+      // Apply light/dark and the accent before the page draws, so it doesn't flash.
+      try {
+        var g = function (k, d) { var v = localStorage.getItem('dndmap:pref:' + k); return v === null ? d : JSON.parse(v); };
+        var m = g('ui.mode', 'dark'), a = g('ui.accent', 'gold');
+        if (m === 'light' || (m === 'auto' && matchMedia('(prefers-color-scheme: light)').matches)) document.documentElement.dataset.mode = 'light';
+        if (a !== 'gold') document.documentElement.dataset.accent = a;
+      } catch (e) {}
+    </script>
     <meta name="description" content="Build battle maps in seconds and share them live with your players." />
     <title>DnD Map</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

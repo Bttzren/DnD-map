@@ -3,6 +3,7 @@ import { normalizeCode } from '../shared/types';
 import { forgetGame, myGames, pref, rememberGame } from './local';
 import { navigate } from './nav';
 import { isLocalPage } from './origin';
+import { AppearanceButton } from './theme';
 
 /** Running inside the DnD Map desktop app. */
 export const isDesktopApp = () => typeof navigator !== 'undefined' && /Electron/.test(navigator.userAgent);
@@ -47,6 +48,7 @@ export function Home() {
   return (
     <main class="home">
       <div class="home-inner">
+        <div class="home-appearance"><AppearanceButton /></div>
         <header class="hero">
           <Logo />
           <h1>DnD Map</h1>

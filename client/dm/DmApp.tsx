@@ -19,6 +19,7 @@ import { TokensPanel } from './panels/TokensPanel';
 import { DmCtl, type Tab, type Tool } from './state';
 import { attachTools } from './tools';
 import { useOrigins } from '../origin';
+import { AppearanceButton } from '../theme';
 
 const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [
   { id: 'select', icon: 'select', label: 'Select & move', key: 'V' },
@@ -187,6 +188,7 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
         <span class={`dot ${s.status}`} title={s.status === 'open' ? 'Connected' : s.status === 'connecting' ? 'Connecting…' : 'Offline: changes will sync when you reconnect'} />
         <button class="btn ghost icon" disabled={!s.canUndo} onClick={() => ctl.undoStep()} title="Undo (Ctrl+Z)"><Icon name="undo" /></button>
         <button class="btn ghost icon" disabled={!s.canRedo} onClick={() => ctl.redoStep()} title="Redo (Ctrl+Shift+Z)"><Icon name="redo" /></button>
+        <AppearanceButton />
         <button class={`btn ghost icon${s.panelOpen ? ' on' : ''}`} onClick={() => ctl.togglePanel()} title="Toggle side panel (Tab)"><Icon name="panel" /></button>
       </header>
 
