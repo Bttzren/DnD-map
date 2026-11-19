@@ -217,6 +217,17 @@ export function drawStaticTextured(map: StaticMap, canvas: AnyCanvas, px: number
   natural((t) => t === 'dirt', tex(th.dirt));
   natural((t) => t === 'grass', tex('grass'));
   natural((t) => t === 'trees', tex('grass-dark'), { grow: 0.2 });
+  natural((t) => t === 'sand', tex('sand'), { width: 0.3 });
+  const mud = natural((t) => t === 'mud', tex('mud'), { width: 0.26 });
+  if (mud) {
+    // Puddles: a little standing water in the lowest spots.
+    for (let k = 0; k < NN; k++) A[k] = smooth((box(mud, k, 0.45) - 0.75) / 0.2) * smooth((N[k] - 0.14) / 0.1) * 0.5;
+    layer(pal.water);
+  }
+  natural((t) => t === 'snow', tex('snow'), { width: 0.32, grow: 0.1 });
+  // Built floors keep almost straight edges, so rooms read as rooms.
+  natural((t) => t === 'wood', tex('wood'), { amp: 0.04, width: 0.05, grow: 0.02 });
+  natural((t) => t === 'tile', tex('tile'), { amp: 0, width: 0.04, grow: 0 });
   const rubble = natural((t) => t === 'rubble', tex('rubble'), { width: 0.3 });
   const pit = natural((t) => t === 'pit', tex('pit'), { amp: 0.2, width: 0.12, grow: 0.04 });
   if (pit) {

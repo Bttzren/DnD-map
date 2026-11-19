@@ -98,7 +98,7 @@ blank and paint.
 | Key | Tool | |
 |---|---|---|
 | `V` | Select & move | Drag tokens (shift-click for groups), click doors to open/close, arrows nudge |
-| `B` | Paint terrain | Walls appear around new floor automatically. Alt-click picks a terrain |
+| `B` | Paint terrain | Stone, wooden and checkered floors, dirt, grass, sand, snow, mud, rubble, water, lava, pits, walls and trees. Walls appear around new floor automatically. Alt-click picks a terrain |
 | `D` | Doors | Click to add; click again to cycle closed, open, secret, gone |
 | `O` | Objects | Chests, tables, pillars, altars, traps (can be hidden) and more |
 | `F` | Fog of war | Reveal or hide a whole room in one click, or brush it |

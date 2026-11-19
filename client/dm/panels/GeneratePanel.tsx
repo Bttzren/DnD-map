@@ -6,6 +6,7 @@ import { idx } from '../../../shared/grid';
 import { THEMES, blankMap, uid, type MapData, type Theme } from '../../../shared/types';
 import { pref } from '../../local';
 import { PALETTES } from '../../render/palette';
+import { THEME_TEXTURES } from '../../render/textures';
 import { Icon, Seg, Switch, toast, useStore } from '../../ui';
 import type { DmCtl } from '../state';
 import { freeSpots } from '../tools';
@@ -97,7 +98,9 @@ export function GeneratePanel({ ctl }: { ctl: DmCtl }) {
         <div class="theme-grid">
           {THEMES.map((t) => (
             <button key={t} class={`theme-card${t === theme ? ' on' : ''}`} onClick={() => setTheme(t)} aria-pressed={t === theme}>
-              <span class="tsw" style={{ background: `linear-gradient(135deg, ${PALETTES[t].floor} 0 55%, ${t === 'forest' ? PALETTES[t].trees : PALETTES[t].wallTop} 55% 100%)` }} />
+              <span class="tsw" style={{ backgroundColor: PALETTES[t].floor, backgroundImage: `url(/textures/${t === 'forest' ? 'grass' : THEME_TEXTURES[t].floor}.webp)` }}>
+                <i style={{ backgroundColor: t === 'forest' ? PALETTES[t].trees : PALETTES[t].wallTop, backgroundImage: `url(/textures/${t === 'forest' ? 'grass-dark' : THEME_TEXTURES[t].wall}.webp)` }} />
+              </span>
               <span>{THEME_EMOJI[t]} {THEME_LABEL[t].replace(' Clearing', '')}</span>
             </button>
           ))}

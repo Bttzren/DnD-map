@@ -8,6 +8,7 @@ import { fromDmMap } from '../render/adapt';
 import { dmImages } from '../images';
 import { MapView } from '../render/mapView';
 import { PALETTES, TERRAIN_LABEL, swatch } from '../render/palette';
+import { textureFor } from '../render/textures';
 import { Icon, Logo, Modal, NumField, QR, Seg, Switch, confirmDialog, copy, useStore } from '../ui';
 import { Inspector } from './Inspector';
 import { GeneratePanel } from './panels/GeneratePanel';
@@ -41,6 +42,20 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 const OBJECT_EMOJI: Record<string, string> = { stairs: '🪜', chest: '🧰', table: '🪵', pillar: '🏛️', altar: '🕯️', statue: '🗿', bed: '🛏️', barrel: '🛢️', campfire: '🔥', trap: '⚠️' };
+/** The paint palette, grouped. */
+const TERRAIN_GROUPS: { label: string; items: Terrain[] }[] = [
+  { label: 'Ground', items: ['floor', 'wood', 'tile', 'dirt', 'grass', 'sand', 'snow', 'mud'] },
+  { label: 'Hazards', items: ['rubble', 'water', 'deepwater', 'lava', 'pit'] },
+  { label: 'Structure', items: ['wall', 'trees', 'void'] },
+];
+
+/** A swatch showing the real texture, tinted for water, with the plain colour underneath. */
+export function terrainSwatch(t: Terrain, theme: Parameters<typeof textureFor>[1], pal: Parameters<typeof swatch>[1]) {
+  const tex = textureFor(t, theme);
+  const tint = t === 'water' ? `linear-gradient(${pal.water}a6, ${pal.water}a6), ` : t === 'deepwater' ? `linear-gradient(${pal.waterDeep}d0, ${pal.waterDeep}d0), ` : t === 'void' ? 'linear-gradient(#0008, #0008), ' : '';
+  return { backgroundColor: swatch(t, pal), backgroundImage: tex ? `${tint}url(/textures/${tex}.webp)` : undefined, backgroundSize: t === 'tile' ? '40% 40%' : '160% 160%', backgroundPosition: 'center' };
+}
+
 const COLORS = ['#f97316', '#ef4444', '#facc15', '#22c55e', '#38bdf8', '#a855f7', '#f4ead5'];
 
 export function DmApp({ code }: { code: string }) {
@@ -279,11 +294,14 @@ function ToolBar({ ctl }: { ctl: DmCtl }) {
     case 'paint':
       body = (
         <>
-          <div class="swatches">
-            {(TERRAINS as readonly Terrain[]).map((t) => (
-              <button key={t} class={`sw${o.terrain === t ? ' on' : ''}`} style={{ background: swatch(t, pal) }} title={`${TERRAIN_LABEL[t]}${t === 'void' ? ' (eraser)' : ''}`} aria-label={TERRAIN_LABEL[t]} onClick={() => ctl.setOpts({ terrain: t })} />
-            ))}
-          </div>
+          {TERRAIN_GROUPS.map((g) => (
+            <div key={g.label} class="swatches tex" role="group" aria-label={g.label}>
+              {g.items.map((t) => (
+                <button key={t} class={`sw tex${o.terrain === t ? ' on' : ''}`} style={terrainSwatch(t, theme, pal)}
+                  title={`${TERRAIN_LABEL[t]}${t === 'void' ? ' (eraser)' : ''}`} aria-label={TERRAIN_LABEL[t]} aria-pressed={o.terrain === t} onClick={() => ctl.setOpts({ terrain: t })} />
+              ))}
+            </div>
+          ))}
           <span class="small" style={{ minWidth: '92px' }}>{TERRAIN_LABEL[o.terrain]}</span>
           {brush}
           <Switch checked={o.autoWalls} onChange={(v) => ctl.setOpts({ autoWalls: v })} label={<span class="small">Auto walls</span>} title="Wrap new ground in walls automatically" />

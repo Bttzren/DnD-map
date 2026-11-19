@@ -2,7 +2,7 @@
 // objects) into an offscreen canvas, so each frame is one drawImage.
 import { cellNoise } from '../../shared/rng';
 import type { ObjectKind, Terrain } from '../../shared/types';
-import { PALETTES, PLAYER_VOID, shade, type Palette } from './palette';
+import { FIXED_COLORS, PALETTES, PLAYER_VOID, shade, type Palette } from './palette';
 import type { RenderMap } from './types';
 
 export function cachePx(w: number, h: number): number {
@@ -152,6 +152,22 @@ function drawGround(ctx: CanvasRenderingContext2D, t: Terrain, x: number, y: num
       const g = ctx.createRadialGradient(X + px / 2, Y + px / 2, px * 0.1, X + px / 2, Y + px / 2, px * 0.8);
       g.addColorStop(0, p.lavaHi); g.addColorStop(0.5, p.lava); g.addColorStop(1, '#7c1d06');
       ctx.fillStyle = g; ctx.fillRect(X, Y, px, px);
+      break;
+    }
+    case 'wood': {
+      ctx.fillStyle = n > 0.5 ? FIXED_COLORS.wood : shade(FIXED_COLORS.wood, 8); ctx.fillRect(X, Y, px, px);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = Math.max(1, px * 0.03);
+      ctx.beginPath(); for (let k = 1; k < 4; k++) { ctx.moveTo(X, Y + (px * k) / 4); ctx.lineTo(X + px, Y + (px * k) / 4); } ctx.stroke();
+      break;
+    }
+    case 'tile': {
+      ctx.fillStyle = (x + y) % 2 ? '#a39d90' : '#4b4741'; ctx.fillRect(X, Y, px, px);
+      break;
+    }
+    case 'sand': case 'snow': case 'mud': {
+      ctx.fillStyle = n > 0.5 ? FIXED_COLORS[t] : shade(FIXED_COLORS[t], t === 'snow' ? -8 : 8); ctx.fillRect(X, Y, px, px);
+      ctx.fillStyle = t === 'snow' ? 'rgba(120,140,170,0.18)' : 'rgba(0,0,0,0.12)';
+      for (let k = 0; k < 3; k++) ctx.fillRect(X + px * cellNoise(x, y, 80 + k), Y + px * cellNoise(x, y, 90 + k), px * 0.07, px * 0.05);
       break;
     }
     case 'pit': {

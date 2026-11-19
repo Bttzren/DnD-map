@@ -4,6 +4,7 @@
 export const TERRAINS = [
   'void', 'floor', 'wall', 'water', 'deepwater', 'lava',
   'grass', 'dirt', 'trees', 'rubble', 'pit',
+  'wood', 'tile', 'sand', 'snow', 'mud',
 ] as const;
 export type Terrain = (typeof TERRAINS)[number];
 

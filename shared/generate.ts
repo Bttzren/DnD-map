@@ -99,9 +99,22 @@ function furnish(rng: Rng, theme: Theme, rooms: PlanRoom[], density: number): Pl
   return objects;
 }
 
+/** Rooms whose name suggests a finer floor than the setting's usual stone. */
+const WOOD_ROOMS = /library|barracks|quarters|mess hall|workshop|storeroom|priest|smugglers|kennel/i;
+const TILE_ROOMS = /throne|shrine|chapel|reliquary|treasury|hall of|altar|mourners|sealed tomb/i;
+export function floorFor(name: string, theme: Theme, base: PlanRoom['terrain']): PlanRoom['terrain'] {
+  if (base !== 'floor' || theme === 'cave' || theme === 'tavern') return base;
+  if (TILE_ROOMS.test(name)) return 'tile';
+  if (WOOD_ROOMS.test(name) && theme !== 'crypt') return 'wood';
+  return base;
+}
+
 function named(theme: Theme, rng: Rng, rects: Rect[], shape: 'rect' | 'cave', terrain: PlanRoom['terrain']): PlanRoom[] {
   const used = new Set<string>();
-  return rects.map((r, i) => ({ id: `r${i + 1}`, name: roomName(theme, rng, used), shape, terrain, note: roomNote(theme, rng), ...r }));
+  return rects.map((r, i) => {
+    const name = roomName(theme, rng, used);
+    return { id: `r${i + 1}`, name, shape, terrain: floorFor(name, theme, terrain), note: roomNote(theme, rng), ...r };
+  });
 }
 
 function roomsAndCorridors(o: GenerateOptions, rng: Rng, dens: number): LayoutPlan {
@@ -139,6 +152,8 @@ function caves(o: GenerateOptions, rng: Rng, dens: number): LayoutPlan {
   // A lake or pond with a deep middle.
   const lake = rng.pick(rooms);
   if (lake.w >= 7 && lake.h >= 7) {
+    // A sandy (caves) or muddy (forest) shore around the water.
+    patches.push({ terrain: forest ? 'mud' : 'sand', x: lake.x, y: lake.y, w: lake.w, h: lake.h, shape: 'blob' });
     patches.push({ terrain: 'water', x: lake.x + 1, y: lake.y + 1, w: lake.w - 2, h: lake.h - 2, shape: 'blob' });
     patches.push({ terrain: 'deepwater', x: lake.x + 3, y: lake.y + 3, w: Math.max(2, lake.w - 6), h: Math.max(2, lake.h - 6), shape: 'blob' });
   }

@@ -51,6 +51,11 @@ TEXTURES = {
     'riverbed': ('dry_riverbed_rock', {'relief': 0.6}),
     'pit': ('gravel_stones', {'relief': 0.5, 'gain': 0.35}),
     'cracks': ('mud_cracked_dry_03', {'relief': 0.0}),  # becomes lava below
+    'wood': ('dark_wooden_planks', {'relief': 0.5, 'gain': 1.05}),
+    'tile': ('checkered_pavement_tiles', {'relief': 0.5, 'gain': 0.95, 'align': True}),
+    'sand': ('coast_sand_01', {'relief': 0.5, 'gain': 1.2, 'tint': (1.08, 1.0, 0.8)}),
+    'snow': ('snow_02', {'relief': 0.7, 'gain': 1.0, 'tint': (0.95, 0.98, 1.05)}),
+    'mud': ('brown_mud_02', {'relief': 0.3, 'gain': 0.95, 'tint': (1.1, 0.86, 0.62)}),
 }
 
 API = 'https://api.polyhaven.com'
@@ -86,12 +91,29 @@ def bake(asset_id: str, opts: dict) -> tuple[np.ndarray, dict]:
         ao = load(url('AO'), 'L')
         out = out * (0.55 + 0.45 * ao)[..., None]
     out = out * opts.get('gain', 1.0) * np.array(opts.get('tint', (1, 1, 1)))
+    if opts.get('align'):
+        out = align_to_edges(out)
     meta = {
         'id': asset_id,
         'meters': round(float(info.get('dimensions', [2000])[0]) / 1000, 3),
         'authors': sorted((info.get('authors') or {}).keys()),
     }
     return np.clip(out, 0, 1), meta
+
+
+def align_to_edges(img: np.ndarray) -> np.ndarray:
+    """Shift a checkered texture so a square's edge sits on the tile edge, so the
+    squares line up with the map grid when one tile spans a whole number of cells."""
+    lum = img.mean(axis=2)
+    dark = lum < np.median(lum)
+    shifts = []
+    for axis in (1, 0):
+        prof = dark.mean(axis=1 - axis) if axis == 1 else dark.mean(axis=1)
+        # Edges are where the dark share along the line flips most sharply.
+        lines = dark if axis == 1 else dark.T
+        flips = np.abs(np.diff(lines.astype(np.int8), axis=1)).sum(axis=0)
+        shifts.append(int(np.argmax(flips)) + 1)
+    return np.roll(np.roll(img, -shifts[0], axis=1), -shifts[1], axis=0)
 
 
 def lava_from_cracks(cracks: np.ndarray) -> np.ndarray:

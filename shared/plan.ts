@@ -32,7 +32,7 @@ export interface LayoutPlan {
   creatures: PlanCreature[];
 }
 
-const ROOM_TERRAINS: ReadonlySet<string> = new Set(['floor', 'water', 'grass', 'dirt', 'rubble']);
+const ROOM_TERRAINS: ReadonlySet<string> = new Set(['floor', 'water', 'grass', 'dirt', 'rubble', 'wood', 'tile', 'sand', 'snow', 'mud']);
 const PATCH_TERRAINS: ReadonlySet<string> = new Set(TERRAINS.filter((t) => t !== 'void'));
 
 const LIMITS = { rooms: 40, connections: 80, patches: 40, objects: 200, creatures: 40, perCreature: 12 };

@@ -2,7 +2,7 @@
 // at a fixed size per grid square. Each texture is downscaled ahead of time
 // to the exact tile size it is drawn at, because canvas patterns are not
 // mipmapped: drawing a 512 px tile at a tenth of its size would shimmer.
-import type { Theme } from '../../shared/types';
+import type { Terrain, Theme } from '../../shared/types';
 
 const METERS_PER_CELL = 1.524; // one 5 ft square
 
@@ -15,6 +15,8 @@ const SCALE: Record<string, number> = {
   'floor-dungeon': 1.7, 'floor-crypt': 1.6, 'floor-cave': 1.4, 'floor-sewer': 1.5, 'floor-tavern': 1.5,
   street: 1.6, rock: 1.6, grass: 1.5, 'grass-dark': 1.5, dirt: 1.6, 'dirt-forest': 1.8, rubble: 1.3,
   riverbed: 1.6, pit: 1.4, lava: 1.8,
+  // Checkered tiles: one tile of the texture spans exactly 10 squares, so each checker is one grid square.
+  wood: 1.2, tile: (10 * 1.524) / 2, sand: 0.3, snow: 1.6, mud: 1.6,
   'wall-dungeon': 1.1, 'wall-crypt': 1.2, 'wall-cave': 1.2, 'wall-sewer': 1.1, 'wall-tavern': 1.1,
 };
 
@@ -117,3 +119,17 @@ export const THEME_TEXTURES: Record<Theme, ThemeTextures> = {
   tavern: { floor: 'floor-tavern', wall: 'wall-tavern', dirt: 'street', voidDm: 'rock', grade: '#ffe2b8', gradeAlpha: 0.2 },
   forest: { floor: 'dirt-forest', wall: 'wall-cave', dirt: 'dirt-forest', voidDm: 'grass-dark', grade: '#f4ffe0', gradeAlpha: 0.15 },
 };
+
+/** Which texture shows a terrain in a setting (for UI swatches); null when it's a plain colour. */
+export function textureFor(t: Terrain, theme: Theme): string | null {
+  const th = THEME_TEXTURES[theme];
+  switch (t) {
+    case 'floor': return th.floor;
+    case 'wall': return th.wall;
+    case 'void': return th.voidDm;
+    case 'water': case 'deepwater': return 'riverbed';
+    case 'trees': return 'grass-dark';
+    case 'dirt': return th.dirt;
+    default: return t;
+  }
+}

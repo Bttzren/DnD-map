@@ -59,3 +59,26 @@ describe('presets', () => {
     expect(PRESETS.filter((p) => p.kind === 'player').length).toBeGreaterThanOrEqual(4);
   });
 });
+
+describe('room floors', () => {
+  it('gives fitting rooms wooden or checkered floors', async () => {
+    const { floorFor } = await import('../../shared/generate');
+    expect(floorFor('Throne Room', 'dungeon', 'floor')).toBe('tile');
+    expect(floorFor('Library', 'dungeon', 'floor')).toBe('wood');
+    expect(floorFor('Chapel', 'crypt', 'floor')).toBe('tile');
+    expect(floorFor('Priest\'s Cell', 'crypt', 'floor')).toBe('floor');
+    expect(floorFor('Grotto', 'cave', 'floor')).toBe('floor');
+    expect(floorFor('Clearing', 'forest', 'grass')).toBe('grass');
+  });
+  it('puts the new floors on generated maps, and they count as open ground', async () => {
+    const { generateMap } = await import('../../shared/generate');
+    const { isOpen } = await import('../../shared/grid');
+    let seen = new Set<string>();
+    for (let i = 0; i < 12; i++) for (const t of generateMap({ theme: 'dungeon', width: 50, height: 40, seed: `floors${i}` }).terrain) seen.add(t);
+    expect(seen.has('wood') || seen.has('tile')).toBe(true);
+    seen = new Set();
+    for (let i = 0; i < 12; i++) for (const t of generateMap({ theme: 'cave', width: 50, height: 40, seed: `shore${i}` }).terrain) seen.add(t);
+    expect(seen.has('sand')).toBe(true);
+    for (const t of ['wood', 'tile', 'sand', 'snow', 'mud'] as const) expect(isOpen(t)).toBe(true);
+  });
+});

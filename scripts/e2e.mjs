@@ -78,7 +78,7 @@ try {
   // Add a visible fighter and a hidden assassin next to it, and reveal the first room.
   const setup = await dm.evaluate((secret) => {
     const { ctl } = window.__dm; const m = ctl.map; const r = m.rooms[0];
-    const free = r.cells.filter((c) => m.terrain[c] === 'floor' && !m.objects.some((o) => o.y * m.width + o.x === c));
+    const free = r.cells.filter((c) => ['floor', 'wood', 'tile', 'dirt', 'grass', 'sand'].includes(m.terrain[c]) && !m.objects.some((o) => o.y * m.width + o.x === c));
     const at = (c) => ({ x: c % m.width, y: Math.floor(c / m.width) });
     const hero = { id: 'tok_hero', name: 'Fighter', label: 'F', color: '#3b82f6', size: 1, kind: 'player', ...at(free[0]), hidden: false, hp: 20, maxHp: 20, ac: 16, conditions: [], note: '', down: false, hpVisibility: 'exact' };
     const sneak = { ...hero, id: 'tok_sneak', name: secret, kind: 'enemy', ...at(free[1]), hidden: true, note: secret };

@@ -8,7 +8,7 @@ export const cellY = (m: Dims, i: number) => Math.floor(i / m.width);
 export const inBounds = (m: Dims, x: number, y: number) => x >= 0 && y >= 0 && x < m.width && y < m.height;
 
 /** Terrain a creature can stand on and walk through (difficult terrain included). */
-const OPEN: ReadonlySet<Terrain> = new Set(['floor', 'water', 'grass', 'dirt', 'rubble']);
+const OPEN: ReadonlySet<Terrain> = new Set(['floor', 'water', 'grass', 'dirt', 'rubble', 'wood', 'tile', 'sand', 'snow', 'mud']);
 export const isOpen = (t: Terrain) => OPEN.has(t);
 
 /** Terrain that blocks sight on the map (walls and solid rock). */

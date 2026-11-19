@@ -55,7 +55,11 @@ export const PALETTES: Record<Theme, Palette> = {
 export const TERRAIN_LABEL: Record<Terrain, string> = {
   void: 'Solid rock', floor: 'Floor', wall: 'Wall', water: 'Shallow water', deepwater: 'Deep water', lava: 'Lava',
   grass: 'Grass', dirt: 'Dirt', trees: 'Trees', rubble: 'Rubble (difficult)', pit: 'Pit',
+  wood: 'Wooden floor', tile: 'Checkered tiles', sand: 'Sand', snow: 'Snow', mud: 'Mud',
 };
+
+/** The same in every setting. */
+export const FIXED_COLORS = { wood: '#5a4232', tile: '#7d776c', sand: '#c4a87e', snow: '#e3e9f0', mud: '#4f3d2c' } as const;
 
 /** Swatch colour for UI pickers. */
 export function swatch(t: Terrain, p: Palette): string {
@@ -71,6 +75,7 @@ export function swatch(t: Terrain, p: Palette): string {
     case 'trees': return p.trees;
     case 'rubble': return p.rubble;
     case 'pit': return p.pit;
+    default: return FIXED_COLORS[t];
   }
 }
 
