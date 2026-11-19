@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon, QR, Switch, copy, toast, useStore } from '../../ui';
 import type { DmCtl } from '../state';
+import { playerOrigin, useOrigins } from '../../origin';
 
-export const playerLink = (code: string) => `${location.origin}/play/${code}`;
+export const playerLink = (code: string) => `${playerOrigin()}/play/${code}`;
 
 export function TablePanel({ ctl }: { ctl: DmCtl }) {
   useStore(ctl, (s) => s.ver);
   const players = useStore(ctl, (s) => s.players);
+  useOrigins();
   const game = ctl.state.game;
   const [banner, setBanner] = useState(game?.screen.banner ?? '');
   const [message, setMessage] = useState(game?.screen.message ?? '');

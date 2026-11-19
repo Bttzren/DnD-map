@@ -1,5 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import http from 'node:http';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
@@ -178,6 +179,19 @@ describe('server', () => {
 
   });
 
+  it('tells pages opened on this computer its wifi address, and nobody else', async () => {
+    const { port } = await start();
+    const get = (host: string) => new Promise<{ lanUrls: string[] }>((res, rej) => {
+      http.get({ host: '127.0.0.1', port, path: '/api/config', headers: { host } }, (r) => {
+        let b = ''; r.on('data', (d) => (b += d)); r.on('end', () => res(JSON.parse(b)));
+      }).on('error', rej);
+    });
+    const local = await get(`localhost:${port}`);
+    for (const u of local.lanUrls) expect(u).toMatch(new RegExp(`^http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}$`));
+    expect(local.lanUrls).not.toContain(`http://127.0.0.1:${port}`);
+    expect((await get('dnd.example.com')).lanUrls).toEqual([]);
+  });
+
   it('rejects a wrong DM secret and player ops', async () => {
     const { port, base } = await start();
     const { body: g } = await newGame(base);
@@ -195,7 +209,7 @@ describe('server', () => {
     expect((await newGame(base, 'nope')).status).toBe(401);
     expect((await newGame(base, 'hunter2')).status).toBe(200);
     const cfg = await (await fetch(`${base}/api/config`)).json();
-    expect(cfg).toEqual({ aiEnabled: false, passwordRequired: true });
+    expect(cfg).toMatchObject({ aiEnabled: false, passwordRequired: true });
   });
 
   it('restores a room from the DM after the server loses its disk', async () => {

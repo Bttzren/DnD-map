@@ -1,3 +1,4 @@
+import { isLocalHost, lanAddresses } from './lan';
 import { createReadStream, promises as fs } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -54,7 +55,10 @@ export async function createApp(o: AppOptions) {
     try {
       const url = new URL(req.url ?? '/', 'http://x');
       if (url.pathname === '/api/config' && req.method === 'GET') {
-        return json(res, 200, { aiEnabled: hub.aiEnabled, passwordRequired: !!o.hostPassword });
+        // Opened on this computer itself: tell the page how phones on the same wifi can reach it,
+        // so the invite QR doesn't point at "localhost". Not shown to anyone browsing from outside.
+        const lanUrls = isLocalHost(req.headers.host) ? lanAddresses().map((ip) => `http://${ip}:${req.socket.localPort}`) : [];
+        return json(res, 200, { aiEnabled: hub.aiEnabled, passwordRequired: !!o.hostPassword, lanUrls });
       }
       if (url.pathname === '/api/health') return json(res, 200, { ok: true });
       if (url.pathname === '/api/games' && req.method === 'POST') {

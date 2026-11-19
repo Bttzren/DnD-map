@@ -17,6 +17,7 @@ import { TablePanel, playerLink } from './panels/TablePanel';
 import { TokensPanel } from './panels/TokensPanel';
 import { DmCtl, type Tab, type Tool } from './state';
 import { attachTools } from './tools';
+import { useOrigins } from '../origin';
 
 const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [
   { id: 'select', icon: 'select', label: 'Select & move', key: 'V' },
@@ -145,6 +146,7 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
 
   const live = ctl.live;
   const editingLive = !!map && map.id === game?.liveMapId;
+  const origins = useOrigins();
   const link = playerLink(s.code);
 
   return (
@@ -234,6 +236,17 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
       {s.share && (
         <Modal title="Invite your players" onClose={() => ctl.set({ share: false })}>
           <p class="muted" style={{ margin: 0 }}>Scan with a phone, or open the link and enter the code.</p>
+          {origins.local && origins.lan.length === 0 && (
+            <p class="hint" style={{ color: '#fbbf24' }}>This computer isn't on a network right now, so phones can't reach it. Connect to wifi (the same one as your players), then reopen this.</p>
+          )}
+          {origins.local && origins.lan.length > 0 && <p class="hint">Players need to be on the same wifi as this computer.</p>}
+          {origins.local && origins.lan.length > 1 && (
+            <label class="field"><span>Network</span>
+              <select class="input sm" value={origins.origin} onChange={(e) => origins.choose(e.currentTarget.value)}>
+                {origins.lan.map((u) => <option key={u} value={u}>{u.replace('http://', '')}</option>)}
+              </select>
+            </label>
+          )}
           <QR text={link} />
           <div style={{ textAlign: 'center', font: '700 34px var(--ui)', letterSpacing: '0.3em', color: 'var(--gold-2)' }}>{s.code}</div>
           <div class="copyline"><input class="input" readOnly value={link} onFocus={(e) => e.currentTarget.select()} /><button class="btn" onClick={() => copy(link)}><Icon name="copy" size={15} /> Copy</button></div>
@@ -241,7 +254,7 @@ function DmScreen({ ctl }: { ctl: DmCtl }) {
           <details>
             <summary class="small muted" style={{ cursor: 'pointer' }}>Run this game from another device (DM link)</summary>
             <p class="hint">This link gives full DM control. Don't share it with players.</p>
-            <button class="btn sm" onClick={() => copy(`${location.origin}/dm/${s.code}#${secretFor(s.code) ?? s.secret}`, 'DM link')}><Icon name="link" size={14} /> Copy DM link</button>
+            <button class="btn sm" onClick={() => copy(`${origins.origin}/dm/${s.code}#${secretFor(s.code) ?? s.secret}`, 'DM link')}><Icon name="link" size={14} /> Copy DM link</button>
           </details>
         </Modal>
       )}
